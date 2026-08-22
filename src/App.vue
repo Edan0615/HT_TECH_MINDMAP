@@ -85,9 +85,7 @@ const stageIsThinking = ref([false, false, false, false, false, false, false, fa
 const stageThoughts = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
 const showThoughtsCollapse = ref([false, false, false, false, false, false, false, false, false, false, false, false])
 
-// Pre-flight preferences
-const isUserEngineer = ref(true)
-const mbtiStyle = ref('INTJ')
+
 
 // Separate output for each stage (12 stages)
 const stageOutputs = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
@@ -577,6 +575,36 @@ const batchColorChange = (color) => {
 const clearSelection = () => {
   selectedNodeIds.value = ['root']
 }
+
+// Pre-flight preferences
+const isUserEngineer = ref(true)
+const mbtiStyle = ref('INTJ')
+
+const getStoredEndpoint = () => {
+  const val = localStorage.getItem('mindmap_ai_endpoint')
+  if (!val || val === 'null' || val === 'undefined' || val.trim() === '') {
+    return 'http://100.108.52.6:8888'
+  }
+  return val
+}
+
+const getStoredModel = () => {
+  const val = localStorage.getItem('mindmap_ai_model')
+  if (!val || val === 'null' || val === 'undefined' || val.trim() === '' || val === 'gpt-3.5-turbo') {
+    return 'gemma-4-12B-it-Q6_K.gguf'
+  }
+  return val
+}
+
+const apiEndpoint = ref(getStoredEndpoint())
+const apiModel = ref(getStoredModel())
+
+watch(apiEndpoint, (newVal) => {
+  localStorage.setItem('mindmap_ai_endpoint', newVal)
+})
+watch(apiModel, (newVal) => {
+  localStorage.setItem('mindmap_ai_model', newVal)
+})
 
 // AI Proposals handlers
 const onAiProposals = ({ report, actions }) => {
