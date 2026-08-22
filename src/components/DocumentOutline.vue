@@ -24,6 +24,7 @@
             : 'hover:bg-neutral-50/50 border-l-2 border-transparent'
         ]"
         @click="selectNode(item.id, $event)"
+        @dblclick="emit('open-properties', item.id)"
       >
         <!-- Toggle button for children -->
         <button 
@@ -52,20 +53,28 @@
           @keydown.up.prevent="focusNeighbor(index, -1)"
           @keydown.down.prevent="focusNeighbor(index, 1)"
           @focus="selectNode(item.id, $event)"
+          @dblclick.stop="emit('open-properties', item.id)"
         />
 
-        <!-- Hover node manipulation buttons -->
-        <div class="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity absolute right-2 bg-neutral-50 pl-2">
+        <!-- Controls panel (Permanently visible SettingsIcon for great accessibility, others on hover) -->
+        <div 
+          class="flex items-center gap-1 absolute right-2 pl-2 transition-all rounded-md"
+          :class="[
+            selectedNodeIds.includes(item.id) 
+              ? 'bg-neutral-50' 
+              : 'bg-white group-hover:bg-neutral-50/50'
+          ]"
+        >
           <button 
             @click.stop="addChild(item.id)"
-            class="p-0.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200/50 rounded"
+            class="p-0.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200/50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
             title="新增子節點"
           >
             <PlusIcon class="w-3.5 h-3.5" />
           </button>
           <button 
             @click.stop="emit('open-properties', item.id)"
-            class="p-0.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200/50 rounded"
+            class="p-0.5 text-neutral-400 hover:text-purple-600 hover:bg-purple-50 rounded"
             title="編輯細節與屬性"
           >
             <SettingsIcon class="w-3.5 h-3.5" />
@@ -73,7 +82,7 @@
           <button 
             v-if="item.id !== 'root'"
             @click.stop="deleteNode(item.id)"
-            class="p-0.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded"
+            class="p-0.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
             title="刪除節點"
           >
             <TrashIcon class="w-3.5 h-3.5" />
