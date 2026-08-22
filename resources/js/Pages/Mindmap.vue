@@ -1257,6 +1257,83 @@ const runMultiStageAnalysis = async () => {
   const nodeText = selectedNode.value.text
   const fullMindmapJson = JSON.stringify(mindmap.value, null, 2)
 
+  let attachedCodeContext = ''
+  
+  // Dynamic agentic file context selector for 12-stage analysis
+  if (allowAiReadCode.value) {
+    try {
+      const treeRes = await window.axios.post('/api/projects/tree', { project: selectedProject.value })
+      if (treeRes.data.success && treeRes.data.files.length > 0) {
+        const filesList = treeRes.data.files.map(f => f.relative_path)
+        
+        // Ask AI which files it needs based on the core mindmap node topic
+        const preFlightRes = await fetch(`${apiEndpointVal}/v1/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: apiModelVal,
+            messages: [
+              { 
+                role: 'system', 
+                content: '你是一個專案目錄結構預檢大師。請閱讀提供的檔案列表，依據使用者的任務指示，回傳一個包含最多 3 個必須精讀的檔案相對路徑之 JSON 陣列。請只回傳陣列 JSON本身，例如：["app/Http/Controllers/HomeController.php"]，絕不要包含任何其它解釋或 Markdown 語法外框。' 
+              },
+              { 
+                role: 'user', 
+                content: `專案檔案列表：\n${JSON.stringify(filesList.slice(0, 300))}\n\n任務指示：請針對目前選取的心智圖架構節點「${nodeText}」進行 12 層深度系統分析規劃。\n請回傳 JSON 陣列：` 
+              }
+            ],
+            temperature: 0.1
+          })
+        })
+        
+        if (preFlightRes.ok) {
+          const preFlightData = await preFlightRes.json()
+          const aiDecision = preFlightData.choices[0]?.message?.content || ''
+          
+          let targetPaths = []
+          try {
+            const arrMatch = aiDecision.match(/\[\s*([\s\S]*?)\s*\]/)
+            if (arrMatch) {
+              targetPaths = JSON.parse(arrMatch[0])
+            } else {
+              targetPaths = JSON.parse(aiDecision.trim())
+            }
+          } catch (e) {
+            filesList.forEach(path => {
+              if (aiDecision.includes(path) && targetPaths.length < 3) {
+                targetPaths.push(path)
+              }
+            })
+          }
+          
+          if (targetPaths && targetPaths.length > 0) {
+            targetPaths = targetPaths.slice(0, 3)
+            attachedCodeContext += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. You can only read. Analyze this project files context to execute your 12-stage report:\n\n`
+            
+            for (const path of targetPaths) {
+              try {
+                const fileRes = await window.axios.post('/api/projects/read', {
+                  project: selectedProject.value,
+                  file_path: path
+                })
+                if (fileRes.data.success) {
+                  attachedCodeContext += `==== 檔案: ${path} ====\n\`\`\`\n${fileRes.data.content}\n\`\`\`\n\n`
+                }
+              } catch (err) {
+                console.error(`12階段讀取檔案 ${path} 失敗:`, err)
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('12階段檔案結構預檢失敗:', err)
+    }
+  } else if (selectedFile.value && selectedFileContent.value) {
+    attachedCodeContext += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. Analyze this project file context to execute your 12-stage report:\n`
+    attachedCodeContext += `==== 檔案: ${selectedFile.value.relative_path} ====\n\`\`\`\n${selectedFileContent.value}\n\`\`\`\n\n`
+  }
+
   const selectedMbtiObj = mbtiOptions.find(o => o.value === mbtiStyle.value)
   const mbtiStyleInstructions = `請採用「${selectedMbtiObj ? selectedMbtiObj.label : mbtiStyle.value}」性格的表達口吻進行全繁體中文輸出。`
 
@@ -1367,7 +1444,8 @@ const runMultiStageAnalysis = async () => {
         .filter(Boolean)
         .join('\n\n')
 
-      const currentPrompt = `當前整個心智圖設計文件的完整 JSON 結構如下：
+      const currentPrompt = `${attachedCodeContext}
+當前整個心智圖設計文件的完整 JSON 結構如下：
 \`\`\`json
 ${fullMindmapJson}
 \`\`\`
@@ -1534,18 +1612,18 @@ const selectedMultiProposalsCount = computed(() => {
           M
         </Link>
         <div>
-          <h1 class="text-sm font-semibold tracking-tight text-neutral-800 flex items-center gap-1.5">
+          <h1 class="text-sm font-bold tracking-tight text-neutral-800 flex items-center gap-1.5 h-6">
             <input 
               v-if="mindmap"
               v-model="mindmap.text"
               type="text"
-              class="bg-transparent border-b border-transparent hover:border-neutral-200 focus:border-neutral-400 focus:outline-none text-sm font-semibold tracking-tight text-neutral-800 py-0 px-1 max-w-[240px] rounded"
+              class="bg-transparent border-b border-transparent hover:border-neutral-200 focus:border-neutral-400 focus:outline-none text-sm font-bold tracking-tight text-neutral-800 p-0 h-6 leading-6 max-w-[240px] rounded align-middle"
               @change="saveToSession"
             />
-            <span v-else>極簡心智圖設計文件</span>
-            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-100/50 shrink-0 select-none">雲端同步</span>
+            <span v-else class="h-6 leading-6">極簡心智圖設計文件</span>
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-100/50 shrink-0 select-none h-4.5 flex items-center justify-center">雲端同步</span>
           </h1>
-          <p class="text-[10px] text-neutral-400">設計文件藍圖編輯器</p>
+          <p class="text-[10px] text-neutral-400 mt-0.5 leading-none">設計文件藍圖編輯器</p>
         </div>
       </div>
 
@@ -1833,6 +1911,10 @@ const selectedMultiProposalsCount = computed(() => {
           :mindmap="mindmap"
           v-model:api-endpoint="apiEndpoint"
           v-model:api-model="apiModel"
+          v-model:allow-ai-read-code="allowAiReadCode"
+          :selected-project="selectedProject"
+          :selected-file="selectedFile"
+          :selected-file-content="selectedFileContent"
           @ai-proposals="onAiProposals"
           @trigger-multistage="triggerMultiStageSetup"
           @add-children="handleAddChildren"

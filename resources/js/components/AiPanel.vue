@@ -66,8 +66,16 @@
       </label>
     </div>
 
-    <div v-if="allowAiReadCode && selectedFile" class="px-4 py-2 bg-purple-50/30 border-b border-neutral-100 text-[10px] text-purple-600 font-mono truncate">
-      📎 已附加: {{ selectedFile.name }}
+    <!-- Project and File Info display -->
+    <div v-if="allowAiReadCode" class="px-4 py-2 bg-purple-50/30 border-b border-neutral-100 space-y-1 text-[10px] text-neutral-500 font-mono">
+      <div class="flex items-center justify-between">
+        <span>🎯 專案名稱:</span>
+        <span class="font-bold text-purple-700">{{ selectedProject || 'beartor' }}</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span>📄 檢視檔案:</span>
+        <span class="truncate max-w-[150px] font-bold text-neutral-700" :title="selectedFile?.relative_path || '未選擇'">{{ selectedFile ? selectedFile.name : '未選擇' }}</span>
+      </div>
     </div>
 
     <!-- Actions / Prompts -->
@@ -172,6 +180,10 @@ const props = defineProps({
     type: String,
     required: true
   },
+  selectedProject: {
+    type: String,
+    default: 'beartor'
+  },
   apiModel: {
     type: String,
     required: true
@@ -255,15 +267,84 @@ const callAi = async (mode) => {
   
   let finalPrompt = ''
   
-  // Inject code context with a strict security boundary instructions
-  if (props.allowAiReadCode && props.selectedFile && props.selectedFileContent) {
-    finalPrompt += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox tool. You have absolutely no permissions or capability to modify, write, or delete any files in the workspace. Do not attempt to generate or output write commands, payload exploits, or code-writing operations. You can only analyze the provided code context and guide the user.\n\n`
-    finalPrompt += `==== 當前唯讀專案代碼資料 ====\n`
-    finalPrompt += `檔案名稱: ${props.selectedFile.name}\n`
-    finalPrompt += `相對路徑: ${props.selectedFile.relative_path}\n`
-    finalPrompt += `程式碼內容如下:\n`
-    finalPrompt += `\`\`\`\n${props.selectedFileContent}\n\`\`\`\n`
-    finalPrompt += `==================================\n\n`
+  // Dynamic agentic file context selector
+  if (props.allowAiReadCode) {
+    currentStage.value = '正在讀取專案目錄結構樹...'
+    try {
+      const treeRes = await window.axios.post('/api/projects/tree', { project: props.selectedProject })
+      if (treeRes.data.success && treeRes.data.files.length > 0) {
+        const filesList = treeRes.data.files.map(f => f.relative_path)
+        
+        currentStage.value = 'AI 正在判斷需要精讀哪些檔案...'
+        const preFlightRes = await fetch(`${apiEndpoint.value}/v1/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: apiModel.value,
+            messages: [
+              { 
+                role: 'system', 
+                content: '你是一個專案目錄結構預檢大師。請閱讀提供的檔案列表，依據使用者的任務指示，回傳一個包含最多 3 個必須精讀的檔案相對路徑之 JSON 陣列。請只回傳陣列 JSON本身，例如：["app/Http/Controllers/HomeController.php"]，絕不要包含任何其它解釋或 Markdown 語法外框。' 
+              },
+              { 
+                role: 'user', 
+                content: `專案檔案列表：\n${JSON.stringify(filesList.slice(0, 300))}\n\n任務指示：${baseInstruction}\n請回傳 JSON 陣列：` 
+              }
+            ],
+            temperature: 0.1
+          })
+        })
+        
+        if (preFlightRes.ok) {
+          const preFlightData = await preFlightRes.json()
+          const aiDecision = preFlightData.choices[0]?.message?.content || ''
+          
+          let targetPaths = []
+          try {
+            const arrMatch = aiDecision.match(/\[\s*([\s\S]*?)\s*\]/)
+            if (arrMatch) {
+              targetPaths = JSON.parse(arrMatch[0])
+            } else {
+              targetPaths = JSON.parse(aiDecision.trim())
+            }
+          } catch (e) {
+            // fallback parser
+            filesList.forEach(path => {
+              if (aiDecision.includes(path) && targetPaths.length < 3) {
+                targetPaths.push(path)
+              }
+            })
+          }
+          
+          if (targetPaths && targetPaths.length > 0) {
+            targetPaths = targetPaths.slice(0, 3)
+            currentStage.value = `正在讀取 AI 指定的檔案 (${targetPaths.length} 個)...`
+            
+            finalPrompt += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. You cannot write/modify files. You can only analyze the following attached files context to answer:\n\n`
+            
+            for (const path of targetPaths) {
+              try {
+                const fileRes = await window.axios.post('/api/projects/read', {
+                  project: props.selectedProject,
+                  file_path: path
+                })
+                if (fileRes.data.success) {
+                  finalPrompt += `==== 檔案: ${path} ====\n\`\`\`\n${fileRes.data.content}\n\`\`\`\n\n`
+                }
+              } catch (err) {
+                console.error(`讀取專案檔案 ${path} 失敗:`, err)
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('預檢專案檔案失敗:', err)
+    }
+  } else if (props.selectedFile && props.selectedFileContent) {
+    // Fallback: If toggle is off but user manually selected a file, still inject that single file
+    finalPrompt += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox tool. You can only read. Analyze this file context:\n`
+    finalPrompt += `==== 檔案: ${props.selectedFile.relative_path} ====\n\`\`\`\n${props.selectedFileContent}\n\`\`\`\n\n`
   }
 
   finalPrompt += `當前整個心智圖設計文件的完整 JSON 結構如下：
