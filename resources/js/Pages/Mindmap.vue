@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch, nextTick, defineComponent, h } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick, defineComponent, h } from 'vue'
 import { Link } from '@inertiajs/vue3'
 import { useMindmap } from '@/composables/useMindmap'
 import { parseMermaidToTree, parseRawJson } from '@/utils/codeParser'
@@ -15,6 +15,45 @@ const props = defineProps({
 })
 
 const isSaving = ref(false)
+
+// Auto-save inactivity timer state
+const showAutoSaveModal = ref(false)
+let idleTimer = null
+let hasAutoSaved = false
+
+const resetIdleTimer = () => {
+  if (idleTimer) clearTimeout(idleTimer)
+  hasAutoSaved = false
+  
+  idleTimer = setTimeout(() => {
+    if (!hasAutoSaved) {
+      hasAutoSaved = true
+      triggerAutoSave()
+    }
+  }, 60000) // 1 minute
+}
+
+const triggerAutoSave = async () => {
+  isSaving.value = true
+  try {
+    const res = await window.axios.post('/mindmaps', {
+      id: props.mindmap.id,
+      title: mindmap.value?.text || '未命名心智圖',
+      data: mindmap.value,
+      ai_history: {
+        stageOutputs: stageOutputs.value,
+        stagesProgress: stagesProgress.value
+      }
+    })
+    if (res.data.success) {
+      showAutoSaveModal.value = true
+    }
+  } catch (e) {
+    console.error('自動儲存失敗：', e)
+  } finally {
+    isSaving.value = false
+  }
+}
 
 const saveToDatabase = async () => {
   isSaving.value = true
@@ -261,6 +300,21 @@ onMounted(() => {
       }
     }
   })
+
+  // Set up auto-save inactivity listeners
+  const activityEvents = ['mousemove', 'mousedown', 'keypress', 'wheel', 'touchstart']
+  activityEvents.forEach(evt => {
+    window.addEventListener(evt, resetIdleTimer)
+  })
+  resetIdleTimer()
+})
+
+onUnmounted(() => {
+  const activityEvents = ['mousemove', 'mousedown', 'keypress', 'wheel', 'touchstart']
+  activityEvents.forEach(evt => {
+    window.removeEventListener(evt, resetIdleTimer)
+  })
+  if (idleTimer) clearTimeout(idleTimer)
 })
 
 // Dynamic loaders
@@ -1360,8 +1414,15 @@ const selectedMultiProposalsCount = computed(() => {
         </Link>
         <div>
           <h1 class="text-sm font-semibold tracking-tight text-neutral-800 flex items-center gap-1.5">
-            <span>{{ mindmap?.text || '極簡心智圖設計文件' }}</span>
-            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-100/50">雲端同步</span>
+            <input 
+              v-if="mindmap"
+              v-model="mindmap.text"
+              type="text"
+              class="bg-transparent border-b border-transparent hover:border-neutral-200 focus:border-neutral-400 focus:outline-none text-sm font-semibold tracking-tight text-neutral-800 py-0 px-1 max-w-[240px] rounded"
+              @change="saveToSession"
+            />
+            <span v-else>極簡心智圖設計文件</span>
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-100/50 shrink-0 select-none">雲端同步</span>
           </h1>
           <p class="text-[10px] text-neutral-400">設計文件藍圖編輯器</p>
         </div>
@@ -2280,6 +2341,37 @@ const selectedMultiProposalsCount = computed(() => {
               <button @click="showNodePropertiesModal = false" class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"><CheckIcon class="w-3.5 h-3.5" /><span>完成修改</span></button>
             </div>
           </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Auto Save Modal -->
+    <transition
+      enter-active-class="transition-all duration-300 ease-out"
+      leave-active-class="transition-all duration-200 ease-in"
+      enter-from-class="opacity-0 scale-95"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div 
+        v-if="showAutoSaveModal"
+        class="fixed inset-0 bg-neutral-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 no-select"
+      >
+        <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col overflow-hidden border border-neutral-100 p-6 text-center space-y-4">
+          <div class="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+            <CheckIcon class="w-6 h-6 stroke-[3px]" />
+          </div>
+          <div class="space-y-1">
+            <h3 class="text-sm font-bold text-neutral-800">雲端自動儲存成功</h3>
+            <p class="text-xs text-neutral-400 leading-relaxed">
+              系統偵測到您已閒置 1 分鐘，已自動將當前最新設計草稿與 12 層分析進度儲存至雲端資料庫。
+            </p>
+          </div>
+          <button 
+            @click="showAutoSaveModal = false"
+            class="w-full py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+          >
+            我知道了
+          </button>
         </div>
       </div>
     </transition>

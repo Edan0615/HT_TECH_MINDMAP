@@ -94,7 +94,7 @@ defineProps({
             <div class="mt-20 max-w-xl text-center flex flex-col items-center space-y-6 animate-slide-up-delay-more">
                 <div class="w-12 h-[1px] bg-neutral-200"></div>
                 <p class="text-xs font-serif italic text-neutral-400 leading-relaxed max-w-sm">
-                    「感謝父母一直以來無條件的支持，也感謝所有支持我的人。」
+                    「快樂的秘訣就是，擁有蘋果的時候只想著蘋果!」
                 </p>
                 
                 <div class="space-y-0.5">

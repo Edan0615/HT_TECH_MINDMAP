@@ -67,14 +67,14 @@
         >
           <button 
             @click.stop="addChild(item.id)"
-            class="p-0.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200/50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+            class="p-0.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200/50 rounded transition-colors"
             title="新增子節點"
           >
             <PlusIcon class="w-3.5 h-3.5" />
           </button>
           <button 
             @click.stop="emit('open-properties', item.id)"
-            class="p-0.5 text-neutral-400 hover:text-purple-600 hover:bg-purple-50 rounded"
+            class="p-0.5 text-neutral-400 hover:text-purple-600 hover:bg-purple-50 rounded transition-colors"
             title="編輯細節與屬性"
           >
             <SettingsIcon class="w-3.5 h-3.5" />
@@ -82,7 +82,7 @@
           <button 
             v-if="item.id !== 'root'"
             @click.stop="deleteNode(item.id)"
-            class="p-0.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+            class="p-0.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
             title="刪除節點"
           >
             <TrashIcon class="w-3.5 h-3.5" />
