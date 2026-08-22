@@ -61,12 +61,6 @@ const triggerAutoSave = async () => {
 const isDirty = ref(false)
 const isLoaded = ref(false)
 
-watch(() => mindmap.value, (newVal) => {
-  if (isLoaded.value && newVal) {
-    isDirty.value = true
-  }
-}, { deep: true })
-
 const saveToDatabase = async () => {
   isSaving.value = true
   try {
@@ -93,7 +87,7 @@ const saveToDatabase = async () => {
 // Project Reader state & actions
 const showProjectReaderModal = ref(false)
 const projects = ref([])
-const selectedProject = ref('')
+const selectedProject = ref('beartor')
 const projectFiles = ref([])
 const fileFilter = ref('')
 const selectedFile = ref(null)
@@ -109,9 +103,8 @@ const openProjectReader = async () => {
     const res = await window.axios.get('/api/projects')
     if (res.data.success) {
       projects.value = res.data.projects
-      if (projects.value.length > 0 && !selectedProject.value) {
-        selectProject(projects.value[0].name)
-      }
+      selectedProject.value = 'beartor'
+      selectProject('beartor')
     }
   } catch (e) {
     console.error('取得專案清單失敗：', e)
@@ -213,6 +206,12 @@ const {
   canRedo,
   COLORS
 } = useMindmap()
+
+watch(() => mindmap.value, (newVal) => {
+  if (isLoaded.value && newVal) {
+    isDirty.value = true
+  }
+}, { deep: true })
 
 // UI state
 const showOutline = ref(true)
