@@ -84,8 +84,46 @@ const showProgressSidebar = ref(false)
 const stageIsThinking = ref([false, false, false, false, false, false, false, false, false, false, false, false])
 const stageThoughts = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
 const showThoughtsCollapse = ref([false, false, false, false, false, false, false, false, false, false, false, false])
+const showStagesAccordion = ref([true, true, true, true, true, true, true, true, true, true, true, true])
 
+// Pre-flight preferences
+const isUserEngineer = ref(true)
+const mbtiStyle = ref('INTJ')
 
+const getStoredEndpoint = () => {
+  const val = localStorage.getItem('mindmap_ai_endpoint')
+  if (!val || val === 'null' || val === 'undefined' || val.trim() === '') {
+    return 'http://100.108.52.6:8888'
+  }
+  return val
+}
+
+const getStoredModel = () => {
+  const val = localStorage.getItem('mindmap_ai_model')
+  if (!val || val === 'null' || val === 'undefined' || val.trim() === '' || val === 'gpt-3.5-turbo') {
+    return 'gemma-4-12B-it-Q6_K.gguf'
+  }
+  return val
+}
+
+const apiEndpoint = ref(getStoredEndpoint())
+const apiModel = ref(getStoredModel())
+
+watch(apiEndpoint, (newVal) => {
+  localStorage.setItem('mindmap_ai_endpoint', newVal)
+})
+watch(apiModel, (newVal) => {
+  localStorage.setItem('mindmap_ai_model', newVal)
+})
+
+// Auto expand accordion for stages currently running/analyzing
+watch(() => stagesProgress.value, (newVal) => {
+  newVal.forEach((stage, idx) => {
+    if (stage.status === 'running') {
+      showStagesAccordion.value[idx] = true
+    }
+  })
+}, { deep: true })
 
 // Separate output for each stage (12 stages)
 const stageOutputs = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
@@ -342,6 +380,20 @@ const copyToClipboard = (text) => {
   })
 }
 
+const scrollToStage = (id) => {
+  const idx = id - 1
+  // Auto-expand this specific stage card's accordion
+  showStagesAccordion.value[idx] = true
+  
+  // Smooth scroll
+  nextTick(() => {
+    const el = document.getElementById(`analysis-stage-card-${id}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+}
+
 // Inline component definitions
 const MermaidRender = defineComponent({
   props: {
@@ -576,35 +628,28 @@ const clearSelection = () => {
   selectedNodeIds.value = ['root']
 }
 
-// Pre-flight preferences
-const isUserEngineer = ref(true)
-const mbtiStyle = ref('INTJ')
-
-const getStoredEndpoint = () => {
-  const val = localStorage.getItem('mindmap_ai_endpoint')
-  if (!val || val === 'null' || val === 'undefined' || val.trim() === '') {
-    return 'http://100.108.52.6:8888'
-  }
-  return val
+const batchColorSelection = (color) => {
+  batchColorChange(color)
 }
 
-const getStoredModel = () => {
-  const val = localStorage.getItem('mindmap_ai_model')
-  if (!val || val === 'null' || val === 'undefined' || val.trim() === '' || val === 'gpt-3.5-turbo') {
-    return 'gemma-4-12B-it-Q6_K.gguf'
-  }
-  return val
+const isUserEngineerVal = isUserEngineer.value
+const mbtiStyleVal = mbtiStyle.value
+
+const triggerMultiStageAnalysisStart = () => {
+  runMultiStageAnalysis()
 }
 
-const apiEndpoint = ref(getStoredEndpoint())
-const apiModel = ref(getStoredModel())
+const applyProposals = () => {
+  applySelectedProposals()
+}
 
-watch(apiEndpoint, (newVal) => {
-  localStorage.setItem('mindmap_ai_endpoint', newVal)
-})
-watch(apiModel, (newVal) => {
-  localStorage.setItem('mindmap_ai_model', newVal)
-})
+const applyMultiProposals = () => {
+  applyMultiStageProposals()
+}
+
+const toggleAllMultiProposalsVal = (val) => {
+  toggleAllMultiProposals(val)
+}
 
 // AI Proposals handlers
 const onAiProposals = ({ report, actions }) => {
@@ -750,6 +795,7 @@ const triggerMultiStageSetup = () => {
   stageIsThinking.value = [false, false, false, false, false, false, false, false, false, false, false, false]
   stageThoughts.value = ['', '', '', '', '', '', '', '', '', '', '', '']
   showThoughtsCollapse.value = [false, false, false, false, false, false, false, false, false, false, false, false]
+  showStagesAccordion.value = [true, true, true, true, true, true, true, true, true, true, true, true]
 }
 
 // 12-Stage Sequential progressive AI reasoning pipeline
@@ -794,7 +840,7 @@ const runMultiStageAnalysis = async () => {
 
     `【第 3 層：開發技術棧與語言適配分析】
 請針對當前節點「${nodeText}」評估開發所需要的「語言與技術棧（Language & Stack）」。分析現有的 Laravel、Vue.js、Tailwind CSS 是否能滿足所有功能需求，並判斷是否必須引入 Python（例如做機器學習、大數據處理、爬蟲）或其他後端語言。
-其中，在資料庫選型部分，請評估 2-3 種主流資料庫（如 MySQL, PostgreSQL, MongoDB, Redis 等）之優缺點，給出明確的比分對照，並基於評分推薦最適合的資料庫選項。
+其中，在資料庫選型部分，請評估 2-3 種主流資料庫（如 MySQL, PostgreSQL, MongoDB, Redis 等）之優缺點，給出明確的比分對照，並基於評分推薦最適合 the 資料庫選項。
 重要視覺规定：請在報告中使用漂亮的 Bootstrap 卡片與網格展示這些技術棧的 Logo 圖標（寬度設定在 40px-50px，水平並排或卡片標題旁邊）。請使用以下高品質公用 SVG URL 作為圖片 src 渲染：
 - Laravel: https://raw.githubusercontent.com/devicons/devicon/master/icons/laravel/laravel-original.svg
 - Vue.js: https://raw.githubusercontent.com/devicons/devicon/master/icons/vuejs/vuejs-original.svg
@@ -839,7 +885,7 @@ const runMultiStageAnalysis = async () => {
     `【第 9 層：資料庫 ER 關聯圖設計 (Mermaid ERD)】
 請針對先前比分推薦的資料庫類型，設計對應的資料庫綱要與關聯表結構。
 請產出一個可直接渲染的 Mermaid ER 圖（Entity Relationship Diagram，使用 \`\`\`mermaid 和 \`\`\` 包裹），必須在圖中清楚標記主鍵 PK、外鍵 FK、以及欄位名稱與屬性類型。
-特別規定：在線條上必須清晰使用關聯基數符號標示其關聯性，例如：一對多 (||--o{)、一對一 (||--||)、多對多 (}|--|{) 等關聯，並撰寫簡短的欄位與關聯規劃解說。`,
+特別規定：在線條上必須清晰使用關聯基數符號標示其關聯性，例如：一對多 (||--o{), 一對一 (||--||), 多對多 (}|--|{) 等關聯，並撰寫簡短的欄位與關聯規劃解說。`,
     
     `【第 10 層：與其他節點關係與資料流互動分析】
 接著，請詳細分析本模組與心智圖中其他節點在資料流向、前端事件或後端 API 上的交互整合關係與依賴程度。`,
@@ -1183,7 +1229,7 @@ const selectedMultiProposalsCount = computed(() => {
               <button 
                 v-for="color in COLORS" 
                 :key="color"
-                @click="batchColorChange(color)"
+                @click="batchColorSelection(color)"
                 class="w-3.5 h-3.5 rounded-full border border-neutral-700 hover:scale-125 transition-transform"
                 :style="{ backgroundColor: color }"
                 :title="'將選取節點變更為此色'"
@@ -1377,7 +1423,7 @@ const selectedMultiProposalsCount = computed(() => {
           <span class="text-xs text-neutral-500">已選取套用 <strong class="text-purple-600 font-semibold">{{ selectedProposalsCount }}</strong> / {{ aiProposalActions.length }} 個變更動作</span>
           <div class="flex items-center gap-3">
             <button @click="showAiModal = false" class="px-4 py-2 border border-neutral-200 hover:bg-neutral-100 text-neutral-700 rounded-xl text-xs font-semibold transition-colors">取消</button>
-            <button @click="applySelectedProposals" :disabled="selectedProposalsCount === 0" class="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5"><CheckIcon class="w-3.5 h-3.5" /><span>套用所選變更</span></button>
+            <button @click="applyProposals" :disabled="selectedProposalsCount === 0" class="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5"><CheckIcon class="w-3.5 h-3.5" /><span>套用所選變更</span></button>
           </div>
         </div>
       </div>
@@ -1497,7 +1543,7 @@ const selectedMultiProposalsCount = computed(() => {
 
               <!-- Start trigger -->
               <button 
-                @click="runMultiStageAnalysis"
+                @click="triggerMultiStageAnalysisStart"
                 class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
               >
                 <SparklesIcon class="w-4 h-4 animate-pulse" />
@@ -1516,7 +1562,8 @@ const selectedMultiProposalsCount = computed(() => {
                 <div 
                   v-for="stage in stagesProgress" 
                   :key="stage.id"
-                  class="flex items-start gap-3 p-3 rounded-xl border transition-all"
+                  @click="scrollToStage(stage.id)"
+                  class="flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer hover:bg-neutral-100/50"
                   :class="[
                     stage.status === 'running' ? 'bg-purple-50/50 border-purple-200 ring-1 ring-purple-100' : '',
                     stage.status === 'success' ? 'bg-emerald-50/30 border-emerald-100 opacity-90' : '',
@@ -1569,21 +1616,32 @@ const selectedMultiProposalsCount = computed(() => {
                   <div 
                     v-for="(stage, idx) in stagesProgress" 
                     :key="stage.id"
+                    :id="`analysis-stage-card-${stage.id}`"
                     class="border border-neutral-200/60 rounded-xl overflow-hidden shadow-sm bg-white"
                   >
-                    <!-- Stage Title Header -->
-                    <div class="bg-neutral-50/80 px-4 py-3 border-b border-neutral-100 flex items-center justify-between text-xs font-semibold text-neutral-700">
+                    <!-- Stage Title Header (Clickable to toggle accordion) -->
+                    <div 
+                      @click="showStagesAccordion[idx] = !showStagesAccordion[idx]"
+                      class="bg-neutral-50/80 px-4 py-3 border-b border-neutral-100 flex items-center justify-between text-xs font-semibold text-neutral-700 cursor-pointer select-none hover:bg-neutral-100/70 transition-colors"
+                    >
                       <span class="flex items-center gap-1.5">
                         <span class="w-4 h-4 rounded-full bg-neutral-200 text-neutral-700 flex items-center justify-center text-[9px]">{{ idx + 1 }}</span>
                         <span>{{ stage.name }}</span>
                       </span>
-                      <span :class="stage.status === 'success' ? 'text-emerald-600' : (stage.status === 'running' ? 'text-purple-600 animate-pulse' : 'text-neutral-400')">
-                        {{ stage.status === 'running' ? '正在生成...' : (stage.status === 'success' ? '已完成' : '等待上游階段...') }}
-                      </span>
+                      <div class="flex items-center gap-3">
+                        <span :class="stage.status === 'success' ? 'text-emerald-600' : (stage.status === 'running' ? 'text-purple-600 animate-pulse' : 'text-neutral-400')">
+                          {{ stage.status === 'running' ? '正在生成...' : (stage.status === 'success' ? '已完成' : '等待上游階段...') }}
+                        </span>
+                        <ChevronUpIcon v-if="showStagesAccordion[idx]" class="w-3.5 h-3.5 text-neutral-400" />
+                        <ChevronDownIcon v-else class="w-3.5 h-3.5 text-neutral-400" />
+                      </div>
                     </div>
                     
                     <!-- Stage Content -->
-                    <div class="p-4 text-xs leading-relaxed text-neutral-700 bg-white relative">
+                    <div 
+                      v-show="showStagesAccordion[idx]"
+                      class="p-4 text-xs leading-relaxed text-neutral-700 bg-white relative border-t border-neutral-50"
+                    >
                       
                       <!-- 1. Active Thinking Panel (Streaming text visible, with a cool frosted/foggy glass overlay) -->
                       <div v-if="stageIsThinking[idx] && stageThoughts[idx]" class="relative border border-purple-100/70 rounded-xl bg-purple-50/5 p-4 mb-4 overflow-hidden">
@@ -1742,7 +1800,7 @@ const selectedMultiProposalsCount = computed(() => {
                 關閉
               </button>
               <button 
-                @click="applyMultiStageProposals"
+                @click="applyMultiProposals"
                 :disabled="!hasStartedMultiStage || isMultiStageRunning || selectedMultiProposalsCount === 0"
                 class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5"
               >
