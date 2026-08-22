@@ -13,6 +13,7 @@ class Mindmap extends Model
     protected $fillable = [
         'user_id',
         'title',
+        'folder',
         'data',
         'ai_history',
     ];

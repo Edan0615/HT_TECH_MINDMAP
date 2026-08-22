@@ -40,6 +40,7 @@ const triggerAutoSave = async () => {
     const res = await window.axios.post('/mindmaps', {
       id: props.mindmap.id,
       title: mindmap.value?.text || '未命名心智圖',
+      folder: props.mindmap.folder || '網站',
       data: mindmap.value,
       ai_history: {
         stageOutputs: stageOutputs.value,
@@ -67,6 +68,7 @@ const saveToDatabase = async () => {
     const res = await window.axios.post('/mindmaps', {
       id: props.mindmap.id,
       title: mindmap.value?.text || '未命名心智圖',
+      folder: props.mindmap.folder || '網站',
       data: mindmap.value,
       ai_history: {
         stageOutputs: stageOutputs.value,

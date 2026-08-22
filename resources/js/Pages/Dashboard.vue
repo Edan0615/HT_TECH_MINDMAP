@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { 
   Plus as PlusIcon, 
   Trash2 as TrashIcon, 
@@ -19,12 +19,30 @@ const props = defineProps({
 });
 
 const isCreating = ref(false);
+const activeFilterFolder = ref('全部');
+
+const uniqueFolders = computed(() => {
+  const folders = new Set();
+  props.mindmaps.forEach(item => {
+    if (item.folder) folders.add(item.folder);
+  });
+  return ['全部', ...Array.from(folders)];
+});
+
+const filteredMindmaps = computed(() => {
+  if (activeFilterFolder.value === '全部') return props.mindmaps;
+  return props.mindmaps.filter(item => item.folder === activeFilterFolder.value);
+});
 
 const createNewMindmap = async () => {
+  const folderName = prompt('請輸入存放資料夾名稱 (例如：網站、作業、商業規劃)：', '網站');
+  if (folderName === null) return; // user cancelled
+
   isCreating.value = true;
   try {
     const res = await window.axios.post('/mindmaps', {
       title: '新專案設計藍圖',
+      folder: folderName.trim() || '網站',
       data: {
         id: 'root',
         text: '新專案設計藍圖',
@@ -143,17 +161,29 @@ const formatDate = (dateStr) => {
 
         <!-- Bento Grid Section -->
         <div>
-          <div class="flex items-center justify-between mb-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
             <h3 class="text-xs font-mono font-bold tracking-[0.3em] text-neutral-400 uppercase">
               專案設計清單 (Blueprints)
             </h3>
-            <div class="h-px bg-neutral-100 flex-1 mx-6 hidden sm:block opacity-60"></div>
+            
+            <!-- Folder Filter Pills -->
+            <div v-if="uniqueFolders.length > 1" class="flex flex-wrap items-center gap-1.5 bg-neutral-50 p-1 rounded-xl border border-neutral-100/80 select-none">
+              <button
+                v-for="folder in uniqueFolders"
+                :key="folder"
+                @click="activeFilterFolder = folder"
+                class="px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+                :class="[activeFilterFolder === folder ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-800']"
+              >
+                {{ folder }}
+              </button>
+            </div>
           </div>
 
           <!-- Mindmap Bento Grid -->
-          <div v-if="mindmaps.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div v-if="filteredMindmaps.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div 
-              v-for="(item, index) in mindmaps" 
+              v-for="(item, index) in filteredMindmaps" 
               :key="item.id"
               class="border border-neutral-100 bg-white rounded-2xl p-5 hover:border-neutral-300 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
             >
@@ -178,6 +208,14 @@ const formatDate = (dateStr) => {
                   <p class="text-[11px] text-neutral-400 leading-relaxed line-clamp-2">
                     主核心節點: <span class="font-semibold text-neutral-500 font-mono">{{ item.data?.text || '未指定' }}</span>
                   </p>
+                  <div class="flex flex-wrap gap-1.5 pt-2 select-none">
+                    <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-neutral-100 text-neutral-600 border border-neutral-200/50">
+                      📁 {{ item.folder || '網站' }}
+                    </span>
+                    <span class="text-[9px] font-mono px-2 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100 flex items-center gap-0.5">
+                      👤 {{ item.user?.name || '未知' }}
+                    </span>
+                  </div>
                 </div>
               </div>
 

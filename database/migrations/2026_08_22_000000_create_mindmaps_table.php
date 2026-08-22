@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('title');
+            $table->string('folder')->default('網站');
             $table->json('data');
             $table->json('ai_history')->nullable();
             $table->timestamps();

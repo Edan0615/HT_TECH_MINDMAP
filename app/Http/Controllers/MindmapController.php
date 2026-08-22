@@ -54,6 +54,7 @@ class MindmapController extends Controller
         $validated = $request->validate([
             'id' => 'nullable|integer|exists:mindmaps,id',
             'title' => 'required|string|max:255',
+            'folder' => 'nullable|string|max:100',
             'data' => 'required|array',
             'ai_history' => 'nullable|array',
         ]);
