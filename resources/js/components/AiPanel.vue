@@ -184,6 +184,10 @@ const props = defineProps({
     type: String,
     default: 'beartor'
   },
+  selectedProjectUser: {
+    type: String,
+    default: 'edan898'
+  },
   apiModel: {
     type: String,
     required: true
@@ -271,73 +275,77 @@ const callAi = async (mode) => {
   if (props.allowAiReadCode) {
     currentStage.value = '正在讀取專案目錄結構樹...'
     try {
-      const treeRes = await window.axios.post('/api/projects/tree', { project: props.selectedProject })
-      if (treeRes.data.success && treeRes.data.files.length > 0) {
-        const filesList = treeRes.data.files.map(f => f.relative_path)
-        
-        currentStage.value = 'AI 正在判斷需要精讀哪些檔案...'
-        const preFlightRes = await fetch(`${apiEndpoint.value}/v1/chat/completions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: apiModel.value,
-            messages: [
-              { 
-                role: 'system', 
-                content: '你是一個專案目錄結構預檢大師。請閱讀提供的檔案列表，依據使用者的任務指示，回傳一個包含最多 3 個必須精讀的檔案相對路徑之 JSON 陣列。請只回傳陣列 JSON本身，例如：["app/Http/Controllers/HomeController.php"]，絕不要包含任何其它解釋或 Markdown 語法外框。' 
-              },
-              { 
-                role: 'user', 
-                content: `專案檔案列表：\n${JSON.stringify(filesList.slice(0, 300))}\n\n任務指示：${baseInstruction}\n請回傳 JSON 陣列：` 
-              }
-            ],
-            temperature: 0.1
-          })
+        const treeRes = await window.axios.post('/api/projects/tree', { 
+          project: props.selectedProject,
+          username: props.selectedProjectUser
         })
-        
-        if (preFlightRes.ok) {
-          const preFlightData = await preFlightRes.json()
-          const aiDecision = preFlightData.choices[0]?.message?.content || ''
+        if (treeRes.data.success && treeRes.data.files.length > 0) {
+          const filesList = treeRes.data.files.map(f => f.relative_path)
           
-          let targetPaths = []
-          try {
-            const arrMatch = aiDecision.match(/\[\s*([\s\S]*?)\s*\]/)
-            if (arrMatch) {
-              targetPaths = JSON.parse(arrMatch[0])
-            } else {
-              targetPaths = JSON.parse(aiDecision.trim())
-            }
-          } catch (e) {
-            // fallback parser
-            filesList.forEach(path => {
-              if (aiDecision.includes(path) && targetPaths.length < 3) {
-                targetPaths.push(path)
-              }
-            })
-          }
-          
-          if (targetPaths && targetPaths.length > 0) {
-            targetPaths = targetPaths.slice(0, 3)
-            currentStage.value = `正在讀取 AI 指定的檔案 (${targetPaths.length} 個)...`
-            
-            finalPrompt += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. You cannot write/modify files. You can only analyze the following attached files context to answer:\n\n`
-            
-            for (const path of targetPaths) {
-              try {
-                const fileRes = await window.axios.post('/api/projects/read', {
-                  project: props.selectedProject,
-                  file_path: path
-                })
-                if (fileRes.data.success) {
-                  finalPrompt += `==== 檔案: ${path} ====\n\`\`\`\n${fileRes.data.content}\n\`\`\`\n\n`
+          currentStage.value = 'AI 正在判斷需要精讀哪些檔案...'
+          const preFlightRes = await fetch(`${apiEndpoint.value}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: apiModel.value,
+              messages: [
+                { 
+                  role: 'system', 
+                  content: '你是一個專案目錄結構預檢大師。請閱讀提供的檔案列表，依據使用者的任務指示，回傳一個包含最多 3 個必須精讀的檔案相對路徑之 JSON 陣列。請只回傳陣列 JSON本身，例如：["app/Http/Controllers/HomeController.php"]，絕不要包含任何其它解釋或 Markdown 語法外框。' 
+                },
+                { 
+                  role: 'user', 
+                  content: `專案檔案列表：\n${JSON.stringify(filesList.slice(0, 300))}\n\n任務指示：${baseInstruction}\n請回傳 JSON 陣列：` 
                 }
-              } catch (err) {
-                console.error(`讀取專案檔案 ${path} 失敗:`, err)
+              ],
+              temperature: 0.1
+            })
+          })
+          
+          if (preFlightRes.ok) {
+            const preFlightData = await preFlightRes.json()
+            const aiDecision = preFlightData.choices[0]?.message?.content || ''
+            
+            let targetPaths = []
+            try {
+              const arrMatch = aiDecision.match(/\[\s*([\s\S]*?)\s*\]/)
+              if (arrMatch) {
+                targetPaths = JSON.parse(arrMatch[0])
+              } else {
+                targetPaths = JSON.parse(aiDecision.trim())
+              }
+            } catch (e) {
+              // fallback parser
+              filesList.forEach(path => {
+                if (aiDecision.includes(path) && targetPaths.length < 3) {
+                  targetPaths.push(path)
+                }
+              })
+            }
+            
+            if (targetPaths && targetPaths.length > 0) {
+              targetPaths = targetPaths.slice(0, 3)
+              currentStage.value = `正在讀取 AI 指定的檔案 (${targetPaths.length} 個)...`
+              
+              finalPrompt += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. You cannot write/modify files. You can only analyze the following attached files context to answer:\n\n`
+              
+              for (const path of targetPaths) {
+                try {
+                  const fileRes = await window.axios.post('/api/projects/read', {
+                    project: props.selectedProject,
+                    file_path: path,
+                    username: props.selectedProjectUser
+                  })
+                  if (fileRes.data.success) {
+                    finalPrompt += `==== 檔案: ${path} ====\n\`\`\`\n${fileRes.data.content}\n\`\`\`\n\n`
+                  }
+                } catch (err) {
+                  console.error(`讀取專案檔案 ${path} 失敗:`, err)
+                }
               }
             }
           }
         }
-      }
     } catch (err) {
       console.error('預檢專案檔案失敗:', err)
     }

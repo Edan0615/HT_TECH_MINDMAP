@@ -88,8 +88,10 @@ const saveToDatabase = async () => {
 
 // Project Reader state & actions
 const showProjectReaderModal = ref(false)
+const projectUsers = ref([])
+const selectedProjectUser = ref('edan898')
 const projects = ref([])
-const selectedProject = ref('beartor')
+const selectedProject = ref('')
 const projectFiles = ref([])
 const fileFilter = ref('')
 const selectedFile = ref(null)
@@ -102,11 +104,37 @@ const openProjectReader = async () => {
   showProjectReaderModal.value = true
   isProjectsLoading.value = true
   try {
-    const res = await window.axios.get('/api/projects')
-    if (res.data.success) {
+    const usersRes = await window.axios.get('/api/projects/users')
+    if (usersRes.data.success) {
+      projectUsers.value = usersRes.data.users
+    }
+    await fetchProjectsForUser()
+  } catch (e) {
+    console.error('開啟檔案閱讀器失敗：', e)
+  } finally {
+    isProjectsLoading.value = false
+  }
+}
+
+const fetchProjectsForUser = async () => {
+  isProjectsLoading.value = true
+  projects.value = []
+  projectFiles.value = []
+  selectedFile.value = null
+  selectedFileContent.value = ''
+  selectedProject.value = ''
+  
+  try {
+    const res = await window.axios.get('/api/projects', {
+      params: { username: selectedProjectUser.value }
+    })
+    if (res.data.success && res.data.projects.length > 0) {
       projects.value = res.data.projects
-      selectedProject.value = 'beartor'
-      selectProject('beartor')
+      
+      const hasBeartor = res.data.projects.find(p => p.name === 'beartor')
+      const targetProj = hasBeartor ? 'beartor' : res.data.projects[0].name
+      selectedProject.value = targetProj
+      await selectProject(targetProj)
     }
   } catch (e) {
     console.error('取得專案清單失敗：', e)
@@ -121,7 +149,10 @@ const selectProject = async (projectName) => {
   selectedFile.value = null
   selectedFileContent.value = ''
   try {
-    const res = await window.axios.post('/api/projects/tree', { project: projectName })
+    const res = await window.axios.post('/api/projects/tree', {
+      project: projectName,
+      username: selectedProjectUser.value
+    })
     if (res.data.success) {
       projectFiles.value = res.data.files
     }
@@ -139,7 +170,8 @@ const selectFile = async (file) => {
   try {
     const res = await window.axios.post('/api/projects/read', {
       project: selectedProject.value,
-      file_path: file.relative_path
+      file_path: file.relative_path,
+      username: selectedProjectUser.value
     })
     if (res.data.success) {
       selectedFileContent.value = res.data.content
@@ -1264,7 +1296,10 @@ const runMultiStageAnalysis = async () => {
   // Dynamic agentic file context selector for 12-stage analysis
   if (allowAiReadCode.value) {
     try {
-      const treeRes = await window.axios.post('/api/projects/tree', { project: selectedProject.value })
+      const treeRes = await window.axios.post('/api/projects/tree', { 
+        project: selectedProject.value,
+        username: selectedProjectUser.value
+      })
       if (treeRes.data.success && treeRes.data.files.length > 0) {
         const filesList = treeRes.data.files.map(f => f.relative_path)
         
@@ -1316,7 +1351,8 @@ const runMultiStageAnalysis = async () => {
               try {
                 const fileRes = await window.axios.post('/api/projects/read', {
                   project: selectedProject.value,
-                  file_path: path
+                  file_path: path,
+                  username: selectedProjectUser.value
                 })
                 if (fileRes.data.success) {
                   attachedCodeContext += `==== 檔案: ${path} ====\n\`\`\`\n${fileRes.data.content}\n\`\`\`\n\n`
@@ -1915,6 +1951,7 @@ const selectedMultiProposalsCount = computed(() => {
           v-model:api-model="apiModel"
           v-model:allow-ai-read-code="allowAiReadCode"
           :selected-project="selectedProject"
+          :selected-project-user="selectedProjectUser"
           :selected-file="selectedFile"
           :selected-file-content="selectedFileContent"
           @ai-proposals="onAiProposals"
@@ -2618,6 +2655,18 @@ const selectedMultiProposalsCount = computed(() => {
           <div class="flex-1 flex min-h-0">
             <!-- Sidebar (Project Selection & File Tree) -->
             <div class="w-80 border-r border-neutral-100 flex flex-col p-4 space-y-4 shrink-0 bg-neutral-50/20 select-none">
+              <!-- User Selector Dropdown -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">選擇使用者 (Linux User)</label>
+                <select 
+                  v-model="selectedProjectUser" 
+                  @change="fetchProjectsForUser"
+                  class="w-full bg-white border border-neutral-200 rounded-lg px-3 py-2 text-xs text-neutral-700 font-semibold focus:outline-none focus:border-purple-300 transition-colors"
+                >
+                  <option v-for="user in projectUsers" :key="user" :value="user">{{ user }}</option>
+                </select>
+              </div>
+
               <!-- Project Selector Dropdown -->
               <div class="space-y-1">
                 <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">選擇專案 (Project)</label>
