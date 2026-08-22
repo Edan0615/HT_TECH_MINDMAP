@@ -201,6 +201,9 @@ onMounted(() => {
           if (confirm(`確定要刪除選取的 ${selectedNodeIds.value.length} 個節點嗎？`)) {
             deleteSelectedNodes()
           }
+        } else if (selectedNodeIds.value.length === 1 && selectedNodeIds.value[0] !== 'root') {
+          e.preventDefault()
+          deleteNode(selectedNodeIds.value[0])
         }
       }
     }
@@ -1414,7 +1417,7 @@ const selectedMultiProposalsCount = computed(() => {
           @add-node="addNode"
           @add-sibling="addSiblingNode"
           @delete-node="deleteNode"
-          @update-text="data => handleUpdateText(data.id, data.text)"
+          @update-text="handleUpdateText"
           @toggle-expand="toggleNodeExpand"
         />
 

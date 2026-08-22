@@ -47,7 +47,7 @@
           @add-sibling="$emit('add-sibling', $event)"
           @delete-node="$emit('delete-node', $event)"
           @move-node="$emit('move-node', $event)"
-          @update-text="$emit('update-text', $event)"
+          @update-text="(id, text) => $emit('update-text', id, text)"
           @toggle-expand="$emit('toggle-expand', $event)"
         />
       </div>

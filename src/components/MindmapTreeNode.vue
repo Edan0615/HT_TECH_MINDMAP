@@ -75,7 +75,7 @@
         @add-node="$emit('add-node', $event)"
         @add-sibling="$emit('add-sibling', $event)"
         @delete-node="$emit('delete-node', $event)"
-        @update-text="$emit('update-text', $event.id, $event.text)"
+        @update-text="(id, text) => $emit('update-text', id, text)"
         @toggle-expand="$emit('toggle-expand', $event)"
       />
     </div>
@@ -136,7 +136,7 @@ const toggleExpand = () => {
 
 const onBlur = (e) => {
   const text = e.target.innerText.trim()
-  emit('update-text', { id: props.node.id, text: text || '主題' })
+  emit('update-text', props.node.id, text || '主題')
 }
 
 const onEnter = (e) => {
