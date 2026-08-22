@@ -64,6 +64,13 @@
             <PlusIcon class="w-3.5 h-3.5" />
           </button>
           <button 
+            @click.stop="emit('open-properties', item.id)"
+            class="p-0.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-200/50 rounded"
+            title="編輯細節與屬性"
+          >
+            <SettingsIcon class="w-3.5 h-3.5" />
+          </button>
+          <button 
             v-if="item.id !== 'root'"
             @click.stop="deleteNode(item.id)"
             class="p-0.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded"
@@ -83,7 +90,8 @@ import {
   FileText as FileTextIcon, 
   ChevronRight as ChevronRightIcon,
   Plus as PlusIcon,
-  Trash as TrashIcon
+  Trash as TrashIcon,
+  Settings as SettingsIcon
 } from '@lucide/vue'
 
 const props = defineProps({
@@ -105,7 +113,8 @@ const emit = defineEmits([
   'update-text',
   'toggle-expand',
   'nest-node',
-  'unnest-node'
+  'unnest-node',
+  'open-properties'
 ])
 
 const inputRefs = ref({})

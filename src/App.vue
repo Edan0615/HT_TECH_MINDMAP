@@ -73,6 +73,10 @@ const showImportCodeModal = ref(false)
 const importCodeText = ref('')
 const importFormat = ref('auto')
 
+// Node Properties Modal state
+const showNodePropertiesModal = ref(false)
+const nodeToEdit = ref(null)
+
 // AI Node Details Loading
 const aiDetailsLoading = ref(false)
 
@@ -195,7 +199,11 @@ onMounted(() => {
       redo()
     }
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+      if (
+        document.activeElement.tagName !== 'INPUT' && 
+        document.activeElement.tagName !== 'TEXTAREA' &&
+        !document.activeElement.isContentEditable
+      ) {
         if (selectedNodeIds.value.length > 1) {
           e.preventDefault()
           if (confirm(`確定要刪除選取的 ${selectedNodeIds.value.length} 個節點嗎？`)) {
@@ -604,6 +612,95 @@ const handleAddChildren = (parentId, childTexts) => {
       newNode.text = text
     }
   })
+}
+
+const openNodePropertiesModal = (nodeId) => {
+  const node = findNode(nodeId)
+  if (node) {
+    nodeToEdit.value = node
+    showNodePropertiesModal.value = true
+  }
+}
+
+const generateNodeDetailsForSelected = async (node) => {
+  if (!node) return
+  aiDetailsLoading.value = true
+  
+  const apiEndpoint = localStorage.getItem('mindmap_ai_endpoint') || 'http://100.108.52.6:8888'
+  const apiModel = localStorage.getItem('mindmap_ai_model') || 'gpt-3.5-turbo'
+  
+  const prompt = `請針對當前設計文件的節點主題「${node.text}」，撰寫一份極為詳細的工程實作計劃與需求分析。
+請包括：
+1. 實作步驟與執行計畫。
+2. 開發需求與規格細節。
+3. 額外附上一個 Mermaid 流程圖（使用 \`\`\`mermaid 和 \`\`\` 包裹）以視覺化此步驟的執行流程。
+
+重要規定：
+請務必只使用「繁體中文」回答，保持專業性、結構化。直接開始輸出，不要有任何前言或客套話。`
+
+  try {
+    const res = await fetch(`${apiEndpoint}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: apiModel,
+        messages: [
+          { role: 'system', content: '你是一位優秀的軟體架構師。請以繁體中文撰寫詳細實作計劃與 Mermaid 流程圖。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        stream: true
+      })
+    })
+
+    if (!res.ok) throw new Error(`API 錯誤: ${res.statusText}`)
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder("utf-8")
+    let finished = false
+    let buffer = ''
+    
+    node.details = ''
+
+    while (!finished) {
+      const { value, done } = await reader.read()
+      if (done) {
+        finished = true
+        break
+      }
+      
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop()
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed === 'data: [DONE]') continue
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const parsed = JSON.parse(trimmed.slice(6))
+            const delta = parsed.choices[0]?.delta
+            const content = delta?.content || delta?.reasoning_content || delta?.reasoning || ''
+            node.details += content
+          } catch (e) {}
+        }
+      }
+    }
+    
+    if (buffer && buffer.startsWith('data: ')) {
+      try {
+        const parsed = JSON.parse(buffer.slice(6))
+        const delta = parsed.choices[0]?.delta
+        const content = delta?.content || delta?.reasoning_content || delta?.reasoning || ''
+        node.details += content
+      } catch (e) {}
+    }
+
+  } catch (error) {
+    alert('AI 生成設計細節時發生錯誤: ' + error.message)
+  } finally {
+    aiDetailsLoading.value = false
+  }
 }
 
 const handleUpdateText = (nodeId, newText) => {
@@ -1404,6 +1501,7 @@ const selectedMultiProposalsCount = computed(() => {
           @toggle-expand="toggleNodeExpand"
           @nest-node="nestNode"
           @unnest-node="unnestNode"
+          @open-properties="openNodePropertiesModal"
         />
       </transition>
 
@@ -2019,6 +2117,91 @@ const selectedMultiProposalsCount = computed(() => {
           <div class="p-5 border-t border-neutral-100 flex items-center justify-end gap-3 bg-neutral-50/50">
             <button @click="showImportCodeModal = false" class="px-4 py-2 border border-neutral-200 hover:bg-neutral-100 text-neutral-700 rounded-xl text-xs font-semibold transition-colors">取消</button>
             <button @click="handleImportCode" class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"><CheckIcon class="w-3.5 h-3.5" /><span>載入至畫布</span></button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Node Properties & Details Modal -->
+    <transition
+      enter-active-class="transition-all duration-300 ease-out"
+      leave-active-class="transition-all duration-200 ease-in"
+      enter-from-class="opacity-0 scale-95"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div 
+        v-if="showNodePropertiesModal && nodeToEdit"
+        class="fixed inset-0 bg-neutral-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 no-select"
+      >
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden border border-neutral-100">
+          <!-- Header -->
+          <div class="p-5 border-b border-neutral-100 flex items-center justify-between shrink-0 bg-neutral-50/50">
+            <div class="flex items-center gap-2">
+              <div class="w-2.5 h-2.5 rounded-full" :style="{ backgroundColor: nodeToEdit.color }"></div>
+              <div>
+                <h2 class="text-sm font-semibold text-neutral-800">編輯節點設計屬性</h2>
+                <p class="text-[11px] text-neutral-400">更換節點文字、標記色彩與詳細實作規格書資料</p>
+              </div>
+            </div>
+            <button @click="showNodePropertiesModal = false" class="p-1 hover:bg-neutral-200/50 rounded-lg text-neutral-400 hover:text-neutral-700 transition-colors">
+              <CloseIcon class="w-4 h-4" />
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div class="p-6 space-y-4">
+            <!-- Node text -->
+            <div class="space-y-1.5">
+              <label class="block text-xs font-semibold text-neutral-500 uppercase tracking-wider">節點名稱 (Text)</label>
+              <input 
+                v-model="nodeToEdit.text"
+                type="text"
+                class="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-xs text-neutral-700 font-semibold focus:outline-none focus:border-neutral-300 transition-colors"
+                placeholder="輸入節點名稱..."
+              />
+            </div>
+
+            <!-- Node color -->
+            <div class="space-y-1.5">
+              <label class="block text-xs font-semibold text-neutral-500 uppercase tracking-wider">標記主題顏色 (Color)</label>
+              <div class="flex items-center gap-2">
+                <button 
+                  v-for="color in COLORS" 
+                  :key="color"
+                  @click="nodeToEdit.color = color"
+                  class="w-6 h-6 rounded-full border hover:scale-110 transition-all flex items-center justify-center cursor-pointer"
+                  :style="{ backgroundColor: color, borderColor: nodeToEdit.color === color ? '#000' : 'transparent' }"
+                >
+                  <CheckIcon v-if="nodeToEdit.color === color" class="w-3.5 h-3.5 text-white stroke-[3px]" />
+                </button>
+              </div>
+            </div>
+
+            <!-- Node details -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="block text-xs font-semibold text-neutral-500 uppercase tracking-wider">詳細規格資料與實作計畫 (Details)</label>
+                <button 
+                  @click="generateNodeDetailsForSelected(nodeToEdit)"
+                  :disabled="aiDetailsLoading"
+                  class="text-[10px] text-purple-600 hover:underline font-semibold flex items-center gap-1 disabled:opacity-40"
+                >
+                  <SparklesIcon class="w-3 h-3 animate-pulse" />
+                  <span>AI 生成計畫</span>
+                </button>
+              </div>
+              <textarea 
+                v-model="nodeToEdit.details"
+                rows="6"
+                placeholder="在此撰寫該功能模組的詳細功能規格、系統要求、甚至代碼說明等身份資料..."
+                class="w-full p-4 bg-neutral-50 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-300 font-mono text-xs text-neutral-700 placeholder:text-neutral-300 resize-none select-text"
+              ></textarea>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="p-5 border-t border-neutral-100 flex items-center justify-end gap-3 bg-neutral-50/50">
+            <button @click="showNodePropertiesModal = false" class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"><CheckIcon class="w-3.5 h-3.5" /><span>完成修改</span></button>
           </div>
         </div>
       </div>
