@@ -1,0 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #ffffff;
+  color: #1b1b1f;
+  overflow: hidden; /* Full-screen app */
+}
+
+/* Custom scrollbar for minimalist look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #e2e8f0;
+}
+
+.no-select {
+  user-select: none;
+}
+
+/* Disable pointer events on node box children when dragging to ensure reliable drop zones */
+body.node-dragging-active .node-box * {
+  pointer-events: none !important;
+}
