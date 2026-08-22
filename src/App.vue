@@ -116,15 +116,6 @@ watch(apiModel, (newVal) => {
   localStorage.setItem('mindmap_ai_model', newVal)
 })
 
-// Auto expand accordion for stages currently running/analyzing
-watch(() => stagesProgress.value, (newVal) => {
-  newVal.forEach((stage, idx) => {
-    if (stage.status === 'running') {
-      showStagesAccordion.value[idx] = true
-    }
-  })
-}, { deep: true })
-
 // Separate output for each stage (12 stages)
 const stageOutputs = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
 
@@ -134,7 +125,7 @@ const stagesProgress = ref([
   { id: 3, name: '第三層：開發技術棧與語言適配分析 (Laravel, Vue, Tailwind, Python)', status: 'idle' },
   { id: 4, name: '第四層：定位與架構規劃評估 (子功能架構 vs. 整體網站方案對比)', status: 'idle' },
   { id: 5, name: '第五層：技術難點與潛在風險評估', status: 'idle' },
-  { id: 6, name: '第六層：技術可行性雷達圖分析 (Chart.js)', status: 'idle' },
+  { id: 6, name: '第六層：技術可行性雷達圖 analysis (Chart.js)', status: 'idle' },
   { id: 7, name: '第七層：技術實作做法設計 (Blade + Vue 掛載與載入機制)', status: 'idle' },
   { id: 8, name: '第八層：模組與核心程式結構 (Model, Migration, Controller, Service & Web.php)', status: 'idle' },
   { id: 9, name: '第九層：資料庫 ER 關聯圖設計 (Mermaid ERD)', status: 'idle' },
@@ -142,6 +133,15 @@ const stagesProgress = ref([
   { id: 11, name: '第十一層：自動生成結構設計 Mermaid 流程圖 & 新增建議', status: 'idle' },
   { id: 12, name: '第十二層：產出供 AI Agent 執行的完整開發指令 Prompt (可複製)', status: 'idle' }
 ])
+
+// Auto expand accordion for stages currently running/analyzing
+watch(() => stagesProgress.value, (newVal) => {
+  newVal.forEach((stage, idx) => {
+    if (stage.status === 'running') {
+      showStagesAccordion.value[idx] = true
+    }
+  })
+}, { deep: true })
 
 const mbtiOptions = [
   { value: 'INTJ', label: 'INTJ — 極度邏輯、條理清晰、直指核心' },
