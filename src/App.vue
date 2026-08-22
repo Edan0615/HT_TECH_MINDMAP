@@ -88,15 +88,6 @@ const showThoughtsCollapse = ref([false, false, false, false, false, false, fals
 // Pre-flight preferences
 const isUserEngineer = ref(true)
 const mbtiStyle = ref('INTJ')
-const apiEndpoint = ref(localStorage.getItem('mindmap_ai_endpoint') || 'http://100.108.52.6:8888')
-const apiModel = ref(localStorage.getItem('mindmap_ai_model') || 'gpt-3.5-turbo')
-
-watch(apiEndpoint, (newVal) => {
-  localStorage.setItem('mindmap_ai_endpoint', newVal)
-})
-watch(apiModel, (newVal) => {
-  localStorage.setItem('mindmap_ai_model', newVal)
-})
 
 // Separate output for each stage (12 stages)
 const stageOutputs = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
@@ -110,7 +101,7 @@ const stagesProgress = ref([
   { id: 6, name: '第六層：技術可行性雷達圖分析 (Chart.js)', status: 'idle' },
   { id: 7, name: '第七層：技術實作做法設計 (Blade + Vue 掛載與載入機制)', status: 'idle' },
   { id: 8, name: '第八層：模組與核心程式結構 (Model, Migration, Controller, Service & Web.php)', status: 'idle' },
-  { id: 9, name: '第九層：MySQL 資料庫 ER 關聯圖設計 (Mermaid ERD)', status: 'idle' },
+  { id: 9, name: '第九層：資料庫 ER 關聯圖設計 (Mermaid ERD)', status: 'idle' },
   { id: 10, name: '第十層：與其他節點關係與資料流互動分析', status: 'idle' },
   { id: 11, name: '第十一層：自動生成結構設計 Mermaid 流程圖 & 新增建議', status: 'idle' },
   { id: 12, name: '第十二層：產出供 AI Agent 執行的完整開發指令 Prompt (可複製)', status: 'idle' }
@@ -258,6 +249,10 @@ const parseAndRenderContent = (text) => {
   }
 
   let parsedText = text
+
+  // Strip structural JSON blocks and Mermaid source code blocks from visible text rendering
+  parsedText = parsedText.replace(/```json\s*[\s\S]*?\s*```/gi, '')
+  parsedText = parsedText.replace(/```mermaid\s*[\s\S]*?\s*```/gi, '')
 
   // 1. Convert Markdown code blocks into beautifully styled code components
   parsedText = parsedText.replace(/```(php|javascript|js|json|css|sql|bash|html|xml)\s*([\s\S]*?)\s*```/gi, (match, lang, code) => {
@@ -418,7 +413,7 @@ const FeasibilityRadarChart = defineComponent({
       chartInstance = new Chart(ctx, {
         type: 'radar',
         data: {
-          labels: ['Laravel 整合度', 'Vue 匹配密合度', 'MySQL 資料庫配合度', '技術團隊維護度', '開發迭代效能'],
+          labels: ['Laravel 整合度', 'Vue 匹配密合度', '資料庫適配性', '技術團隊維護度', '開發迭代效能'],
           datasets: [{
             label: '技術可行性分析評分 (越接近 Laravel Vue 越高分)',
             data: [
@@ -771,7 +766,7 @@ const runMultiStageAnalysis = async () => {
 
     `【第 3 層：開發技術棧與語言適配分析】
 請針對當前節點「${nodeText}」評估開發所需要的「語言與技術棧（Language & Stack）」。分析現有的 Laravel、Vue.js、Tailwind CSS 是否能滿足所有功能需求，並判斷是否必須引入 Python（例如做機器學習、大數據處理、爬蟲）或其他後端語言。
-其中，資料庫請務必主要推薦採用 MySQL 為核心存儲。
+其中，在資料庫選型部分，請評估 2-3 種主流資料庫（如 MySQL, PostgreSQL, MongoDB, Redis 等）之優缺點，給出明確的比分對照，並基於評分推薦最適合的資料庫選項。
 重要視覺规定：請在報告中使用漂亮的 Bootstrap 卡片與網格展示這些技術棧的 Logo 圖標（寬度設定在 40px-50px，水平並排或卡片標題旁邊）。請使用以下高品質公用 SVG URL 作為圖片 src 渲染：
 - Laravel: https://raw.githubusercontent.com/devicons/devicon/master/icons/laravel/laravel-original.svg
 - Vue.js: https://raw.githubusercontent.com/devicons/devicon/master/icons/vuejs/vuejs-original.svg
@@ -781,7 +776,7 @@ const runMultiStageAnalysis = async () => {
     `【第 4 層：定位與架構規劃評估 (子功能架構 vs. 整體網站方案對比)】
 請判斷當前選取節點「${nodeText}」是屬於「子功能/子模組 (小局觀)」還是「整體網站/大系統 (大局觀)」：
 重要判斷提示：請注意！即使當前選取的節點在心智圖結構中層級很高，它也可能只是使用者剛剛臨時加入的一個「局部微觀功能 (小局觀)」。請依據該節點文字的實際「語意」進行智慧分析（例如：「登入功能」、「購物車結帳」代表小功能；「企業內部 ERP 系統」、「電商平台」代表大系統），切勿只看樹狀層級深淺。
-1. 如果是「子功能/子模組 (小局觀)」：請注重其與主系統之完整性與呼應性，詳細 analysis此功能所需要的 Model、Relationship (關聯模型設計)、Migration、Controller、Web.php (路由與路徑規劃)、Service Layer 服務層架構問題。
+1. 如果是「子功能/子模組 (小局觀)」：請注重其與主系統之完整性與呼應性，詳細分析此功能所需要的 Model、Relationship (關聯模型設計)、Migration、Controller、Web.php (路由與路徑規劃)、Service Layer 服務層架構問題。
 2. 如果是「整體網站/大系統 (大局觀)」：請詳細評估並對比以下三種主流開發方案之利弊：
    A. Blade 為核心，Vue 局部嵌入掛載 (SEO 友善)
    B. Laravel Breeze 並用 Inertia.js 嵌入 (單頁一頁式網站 SPA 友善)
@@ -811,10 +806,10 @@ const runMultiStageAnalysis = async () => {
     
     `【第 8 層：模組與核心程式結構 (Model, Migration, Controller, Service & Web.php)】
 接著，請為此混合模組設計具體的功能程式結構、模型規劃（Model 與 Relationships）、Migration 資料庫遷移規劃、Controller 與 Service Layer 業務分離邏輯，以及 Web.php 具體路由寫法。
-注意：資料庫存儲請務必主要推薦並使用 MySQL 資料庫。`,
+注意：資料庫部分請使用先前理性分析比分推薦的資料庫，並提供具體的 Migration 與表欄位結構。`,
 
-    `【第 9 層：MySQL 資料庫 ER 關聯圖設計 (Mermaid ERD)】
-請針對當前開發目標「${nodeText}」設計對應的 MySQL 資料庫綱要。
+    `【第 9 層：資料庫 ER 關聯圖設計 (Mermaid ERD)】
+請針對先前比分推薦的資料庫類型，設計對應的資料庫綱要與關聯表結構。
 請產出一個可直接渲染的 Mermaid ER 圖（Entity Relationship Diagram，使用 \`\`\`mermaid 和 \`\`\` 包裹），必須在圖中清楚標記主鍵 PK、外鍵 FK、以及欄位名稱與屬性類型。
 特別規定：在線條上必須清晰使用關聯基數符號標示其關聯性，例如：一對多 (||--o{)、一對一 (||--||)、多對多 (}|--|{) 等關聯，並撰寫簡短的欄位與關聯規劃解說。`,
     
@@ -831,7 +826,7 @@ const runMultiStageAnalysis = async () => {
 1. **獨立的 Markdown (.md) 設計書**：
    - 【前端規格設計書 (Frontend.md)】：包含 Vue 元件掛載、Props 傳遞與前端 UI 邏輯。
    - 【後端規格設計書 (Backend.md)】：包含 Controller、Service 層、路由 API、防禦性驗證機制。
-   - 【資料庫設計書 (Database.md)】：主要推薦採用 MySQL 資料庫，並包含對應 Migration 欄位設定。
+   - 【資料庫設計書 (Database.md)】：使用先前評估比分推薦的資料庫，並包含對應表欄位欄位設定與結構。
 2. **資料庫 ER 關聯圖 (ER Diagram)**：
    - 必須輸出一個 Mermaid ER 圖（Entity Relationship Diagram），在圖中尤其必須清楚標記一對多 (One-to-Many)、一對一 (One-to-One)、或多對多 (Many-to-Many) 等關聯基數符號。
 3. **開發順序時間軸 (Development Timeline)**：
@@ -1466,7 +1461,7 @@ const selectedMultiProposalsCount = computed(() => {
                 <div class="p-3.5 bg-neutral-50 rounded-xl border border-neutral-100 text-xs text-neutral-500 space-y-1 leading-relaxed">
                   <div class="font-semibold text-neutral-600">技術框架規範：</div>
                   <div>- 分析中提供之範例代碼將優先包含 <strong>HTML, Bootstrap, jQuery</strong> 及 Vue 混合架構。</div>
-                  <div>- 系統將在每一層報告中，自動分析並推薦以 <strong>MySQL</strong> 為主存儲之開源/成熟套件。</div>
+                  <div>- 系統將自動理性評估適用之資料庫優缺點並比分，以產出最契合的資料表 Migration 與 ER 圖。</div>
                 </div>
               </div>
 
