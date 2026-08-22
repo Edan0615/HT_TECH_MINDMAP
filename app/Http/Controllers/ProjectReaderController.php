@@ -8,6 +8,12 @@ use Symfony\Component\Finder\Finder;
 
 class ProjectReaderController extends Controller
 {
+    /**
+     * [CRITICAL SECURITY BOUNDARY]
+     * THIS CONTROLLER IS DESIGNED TO BE STRICTLY READ-ONLY (SELECTIVE FILE READS).
+     * WRITE OPERATIONS, FILE DELETIONS, OR TERMINAL EXECUTIONS ARE EXPLICITLY DENIED.
+     * DO NOT IMPLEMENT OR EXECUTE ANY PAYLOADS OR WRITE APIs IN THIS SCOPE.
+     */
     protected $basePath = '/home/edan898/project';
 
     /**

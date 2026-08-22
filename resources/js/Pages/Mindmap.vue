@@ -157,6 +157,25 @@ const filteredFiles = computed(() => {
   )
 })
 
+const expandedFolders = ref({})
+
+const toggleFolder = (folderName) => {
+  expandedFolders.value[folderName] = expandedFolders.value[folderName] === false ? true : false
+}
+
+const groupedFiles = computed(() => {
+  const groups = {}
+  filteredFiles.value.forEach(file => {
+    const parts = file.relative_path.split('/')
+    const dir = parts.slice(0, -1).join('/') || '/'
+    if (!groups[dir]) {
+      groups[dir] = []
+    }
+    groups[dir].push(file)
+  })
+  return groups
+})
+
 import { 
   Menu as MenuIcon, 
   Sparkles as SparklesIcon,
@@ -166,6 +185,8 @@ import {
   RotateCw as RedoIcon,
   Trash2 as TrashIcon,
   FileSpreadsheet as TemplateIcon,
+  Folder as FolderIcon,
+  FileCode as FileIcon,
   Eye as EyeIcon,
   EyeOff as EyeOffIcon,
   X as CloseIcon,
@@ -923,7 +944,16 @@ const refineStageOutput = async (idx) => {
     ? '讀者是「專業軟體工程師」，請務必使用精確的技術專有名詞、程式架構、設計模式進行專業解說。'
     : '讀者是「非技術人員」，請以通俗易懂的平實白話文，搭配生活中的譬喻進行 analysis。'
 
-  const refinePrompt = `當前整個心智圖設計文件的完整 JSON 結構如下：
+  let refinePrompt = ''
+  if (allowAiReadCode.value && selectedFile.value && selectedFileContent.value) {
+    refinePrompt += `[CRITICAL SECURITY BOUNDARY] You are in a strictly READ-ONLY sandbox. You have absolutely no permissions or capability to modify, write, or delete any files in the workspace. Do not attempt to output write commands, payload exploits, or modify the repository. You can only analyze the provided code context and guide the user.\n\n`
+    refinePrompt += `==== 當前唯讀專案代碼資料 ====\n`
+    refinePrompt += `檔案名稱: ${selectedFile.value.name}\n`
+    refinePrompt += `相對路徑: ${selectedFile.value.relative_path}\n`
+    refinePrompt += `程式碼內容:\n\`\`\`\n${selectedFileContent.value}\n\`\`\`\n==================================\n\n`
+  }
+
+  refinePrompt += `當前整個心智圖設計文件的完整 JSON 結構如下：
 \`\`\`json
 ${fullMindmapJson}
 \`\`\`
@@ -2540,17 +2570,32 @@ const selectedMultiProposalsCount = computed(() => {
                 <div v-else-if="filteredFiles.length === 0" class="flex-1 flex items-center justify-center text-xs text-neutral-300">
                   無匹配的檔案
                 </div>
-                <div v-else class="flex-1 overflow-y-auto space-y-0.5 pr-1 font-mono text-xs">
-                  <button 
-                    v-for="file in filteredFiles" 
-                    :key="file.relative_path"
-                    @click="selectFile(file)"
-                    class="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-neutral-100 transition-colors flex flex-col justify-start select-text cursor-pointer"
-                    :class="[selectedFile?.relative_path === file.relative_path ? 'bg-purple-50 text-purple-700 font-semibold' : 'text-neutral-600']"
-                  >
-                    <span class="truncate block w-full text-[11px]">{{ file.name }}</span>
-                    <span class="text-[8px] opacity-40 truncate block w-full">{{ file.relative_path }}</span>
-                  </button>
+                <div v-else class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
+                  <div v-for="(files, folderName) in groupedFiles" :key="folderName" class="space-y-0.5">
+                    <!-- Folder Header -->
+                    <button 
+                      @click="toggleFolder(folderName)"
+                      class="w-full flex items-center gap-1.5 px-2 py-1 text-neutral-500 hover:text-neutral-800 text-[10px] font-semibold tracking-wider text-left bg-neutral-100/50 rounded cursor-pointer select-none"
+                    >
+                      <FolderIcon class="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                      <span class="truncate">{{ folderName }}</span>
+                      <span class="text-[8px] opacity-40 ml-auto font-mono">({{ files.length }})</span>
+                    </button>
+                    
+                    <!-- Files inside folder -->
+                    <div v-if="expandedFolders[folderName] !== false" class="pl-2 border-l border-neutral-100 ml-3.5 space-y-0.5">
+                      <button 
+                        v-for="file in files" 
+                        :key="file.relative_path"
+                        @click="selectFile(file)"
+                        class="w-full text-left px-2 py-1 rounded hover:bg-neutral-100 transition-colors flex items-center gap-1.5 cursor-pointer font-mono"
+                        :class="[selectedFile?.relative_path === file.relative_path ? 'bg-purple-50 text-purple-700 font-semibold' : 'text-neutral-600']"
+                      >
+                        <FileIcon class="w-3 h-3 text-neutral-400 shrink-0" />
+                        <span class="truncate block text-[11px] select-text">{{ file.name }}</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

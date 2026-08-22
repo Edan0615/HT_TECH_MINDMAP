@@ -53,6 +53,23 @@
       </div>
     </div>
 
+    <!-- Toggle for allowAiReadCode -->
+    <div class="px-4 py-2.5 bg-neutral-50/50 border-b border-neutral-100 flex items-center justify-between select-none">
+      <span class="text-xs text-neutral-500 font-semibold">附加專案代碼 Context</span>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input 
+          type="checkbox" 
+          v-model="allowAiReadCode" 
+          class="sr-only peer"
+        />
+        <div class="w-9 h-5 bg-neutral-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+      </label>
+    </div>
+
+    <div v-if="allowAiReadCode && selectedFile" class="px-4 py-2 bg-purple-50/30 border-b border-neutral-100 text-[10px] text-purple-600 font-mono truncate">
+      📎 已附加: {{ selectedFile.name }}
+    </div>
+
     <!-- Actions / Prompts -->
     <div class="flex-1 overflow-y-auto p-4 space-y-4">
       <div class="space-y-2">
@@ -158,10 +175,28 @@ const props = defineProps({
   apiModel: {
     type: String,
     required: true
+  },
+  allowAiReadCode: {
+    type: Boolean,
+    default: false
+  },
+  selectedFile: {
+    type: Object,
+    default: null
+  },
+  selectedFileContent: {
+    type: String,
+    default: ''
   }
 })
 
-const emit = defineEmits(['ai-proposals', 'trigger-multistage', 'update:apiEndpoint', 'update:apiModel'])
+const emit = defineEmits([
+  'ai-proposals', 
+  'trigger-multistage', 
+  'update:apiEndpoint', 
+  'update:apiModel', 
+  'update:allowAiReadCode'
+])
 
 const showSettings = ref(false)
 
@@ -178,6 +213,13 @@ const apiModel = computed({
   set: (val) => {
     emit('update:apiModel', val)
     localStorage.setItem('mindmap_ai_model', val)
+  }
+})
+
+const allowAiReadCode = computed({
+  get: () => props.allowAiReadCode,
+  set: (val) => {
+    emit('update:allowAiReadCode', val)
   }
 })
 
@@ -206,11 +248,25 @@ const callAi = async (mode) => {
   } else if (mode === 'refine') {
     baseInstruction = `請審視當前的心智圖結構（見下方的完整 JSON）。請指出哪裡可能有不合理、需要優化、需要「修改 (update)」或需要「刪除 (delete)」的節點。請給予簡短分析，並在 JSON 列表中列出對應的 delete 與 update 動作。`
   } else {
-    baseInstruction = `當前選取的節點為：「${props.selectedNode.text}」。指令為：${customPrompt.value}。請根據此指令進行分析，並在回答末尾的 JSON 列表中給出對應的 add/delete/update 動作建議。`
+    baseInstruction = `當前選取的節點為：「${props.selectedNode.text}」。指令為：${customPrompt.value}。請根據此指令進行分析，並在回答末尾 the JSON 列表中給出對應的 add/delete/update 動作建議。`
   }
 
   const fullMindmapJson = props.mindmap ? JSON.stringify(props.mindmap, null, 2) : ''
-  const finalPrompt = `當前整個心智圖設計文件的完整 JSON 結構如下：
+  
+  let finalPrompt = ''
+  
+  // Inject code context with a strict security boundary instructions
+  if (props.allowAiReadCode && props.selectedFile && props.selectedFileContent) {
+    finalPrompt += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox tool. You have absolutely no permissions or capability to modify, write, or delete any files in the workspace. Do not attempt to generate or output write commands, payload exploits, or code-writing operations. You can only analyze the provided code context and guide the user.\n\n`
+    finalPrompt += `==== 當前唯讀專案代碼資料 ====\n`
+    finalPrompt += `檔案名稱: ${props.selectedFile.name}\n`
+    finalPrompt += `相對路徑: ${props.selectedFile.relative_path}\n`
+    finalPrompt += `程式碼內容如下:\n`
+    finalPrompt += `\`\`\`\n${props.selectedFileContent}\n\`\`\`\n`
+    finalPrompt += `==================================\n\n`
+  }
+
+  finalPrompt += `當前整個心智圖設計文件的完整 JSON 結構如下：
 \`\`\`json
 ${fullMindmapJson}
 \`\`\`
