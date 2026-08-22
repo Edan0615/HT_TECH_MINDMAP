@@ -7,7 +7,8 @@ import {
   Trash2 as TrashIcon, 
   FileText as FileIcon, 
   ArrowRight as ArrowRightIcon,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Sparkles as SparklesIcon
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -23,12 +24,12 @@ const createNewMindmap = async () => {
   isCreating.value = true;
   try {
     const res = await window.axios.post('/mindmaps', {
-      title: '未命名專案心智圖',
+      title: '新專案設計藍圖',
       data: {
         id: 'root',
-        text: '未命名專案心智圖',
+        text: '新專案設計藍圖',
         color: '#1b1b1f',
-        details: '雙擊或點擊齒輪編輯此節點細節。',
+        details: '雙擊或點擊大綱旁的齒輪編輯此節點細節。',
         expanded: true,
         children: [
           {
@@ -85,107 +86,148 @@ const formatDate = (dateStr) => {
 
   <AuthenticatedLayout>
     <template #header>
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-bold text-neutral-800 leading-tight">
-          專案設計心智圖控制台
-        </h2>
+      <div class="flex items-center justify-between no-select">
+        <div>
+          <h2 class="text-xl font-black tracking-tight text-neutral-800 uppercase">
+            Workspace Dashboard
+          </h2>
+          <p class="text-[10px] text-neutral-400 font-mono tracking-wider uppercase mt-0.5">專案藍圖管理控制台</p>
+        </div>
+        
         <button
           @click="createNewMindmap"
           :disabled="isCreating"
-          class="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+          class="flex items-center gap-1.5 px-4 py-2 bg-[#1A1A1A] hover:bg-[#2c2c2c] text-white rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm hover:shadow-md transition-all duration-300 disabled:opacity-50 cursor-pointer"
         >
           <span v-if="isCreating" class="w-3.5 h-3.5 border-2 border-t-transparent border-white rounded-full animate-spin"></span>
-          <PlusIcon v-else class="w-3.5 h-3.5" />
+          <PlusIcon v-else class="w-3.5 h-3.5 text-[#FACC15]" />
           <span>建立新心智圖</span>
         </button>
       </div>
     </template>
 
-    <div class="py-10 bg-neutral-50/50 min-h-[calc(100vh-7rem)]">
-      <div class="mx-auto max-w-7xl sm:px-6 lg:px-8 space-y-6">
-        <!-- Dashboard stats / intro banner -->
-        <div class="bg-gradient-to-r from-purple-900 to-indigo-950 rounded-2xl p-6 text-white shadow-sm flex items-center justify-between">
-          <div class="space-y-1">
-            <h3 class="text-base font-bold">歡迎回來，{{ $page.props.auth.user.name }}！</h3>
-            <p class="text-xs text-purple-200/80">在這裡管理所有專案的 12 層 AI 架構設計藍圖與心智圖草稿，並與團隊成員進行內網分享。</p>
+    <div class="relative min-h-[calc(100vh-7rem)] bg-white py-10 px-4 sm:px-6 lg:px-8 overflow-hidden">
+      <!-- Fluid Background Blurs to match HTIS_Tailwind -->
+      <div class="absolute w-[400px] h-[400px] rounded-full bg-[#FACC15] blur-[150px] opacity-[0.06] top-[-10%] left-[-10%] pointer-events-none"></div>
+      <div class="absolute w-[450px] h-[450px] rounded-full bg-[#FACC15] blur-[160px] opacity-[0.08] bottom-[-10%] right-[-10%] pointer-events-none"></div>
+
+      <div class="mx-auto max-w-7xl space-y-8 relative z-10">
+        
+        <!-- ═══ HTIS-Style Hero Branding Panel ═══ -->
+        <div class="border border-neutral-100 bg-[#F9FAFB]/60 backdrop-blur-md rounded-2xl p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
+          <div class="space-y-3">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-mono font-bold tracking-[0.3em] text-[#FACC15] uppercase">System Overview</span>
+              <span class="text-neutral-300">•</span>
+              <span class="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">HTIS Mindmap v1.0</span>
+            </div>
+            
+            <h3 class="text-2xl md:text-3xl font-black text-neutral-800 tracking-tight leading-none uppercase">
+              歡迎回來, <span class="font-serif italic font-light text-neutral-500 lowercase">{{ $page.props.auth.user.name }}</span>
+            </h3>
+            <p class="text-xs text-neutral-500 leading-relaxed max-w-xl">
+              在此快速建立 12 層級的 AI 漸進分析設計藍圖。整合 Laravel 全端代碼結構、MySQL 關聯模型與系統細節，隨時導出為標準 JSON 格式。
+            </p>
           </div>
-          <div class="text-right">
-            <span class="text-3xl font-black font-mono">{{ mindmaps.length }}</span>
-            <span class="block text-[10px] text-purple-200 uppercase tracking-wider font-semibold">已存心智圖總數</span>
+          
+          <!-- Large Stats Counter -->
+          <div class="border-t md:border-t-0 md:border-l border-neutral-100 pt-6 md:pt-0 md:pl-8 flex items-center md:flex-col items-end justify-between md:justify-center min-w-[120px] select-none">
+            <span class="text-5xl md:text-6xl font-black font-mono text-[#1A1A1A] leading-none tracking-tighter">
+              {{ String(mindmaps.length).padStart(2, '0') }}
+            </span>
+            <span class="text-[9px] tracking-[0.2em] text-neutral-400 font-bold uppercase mt-1">
+              Active Blueprints
+            </span>
           </div>
         </div>
 
-        <!-- Mindmap grid -->
-        <div v-if="mindmaps.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Bento Grid Section -->
+        <div>
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xs font-mono font-bold tracking-[0.3em] text-neutral-400 uppercase">
+              專案設計清單 (Blueprints)
+            </h3>
+            <div class="h-px bg-neutral-100 flex-1 mx-6 hidden sm:block opacity-60"></div>
+          </div>
+
+          <!-- Mindmap Bento Grid -->
+          <div v-if="mindmaps.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div 
+              v-for="(item, index) in mindmaps" 
+              :key="item.id"
+              class="border border-neutral-100 bg-white rounded-2xl p-5 hover:border-neutral-300 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+            >
+              <!-- Card Top -->
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <!-- Row Number in Serif Style -->
+                  <span class="text-lg font-serif italic text-[#FACC15] font-light">
+                    0{{ index + 1 }}
+                  </span>
+                  
+                  <span class="text-[9px] font-mono text-neutral-400 flex items-center gap-1.5 bg-neutral-50 px-2.5 py-1 rounded-full border border-neutral-100">
+                    <CalendarIcon class="w-3 h-3 text-neutral-400" />
+                    <span>{{ formatDate(item.updated_at) }}</span>
+                  </span>
+                </div>
+                
+                <div class="space-y-1.5">
+                  <h4 class="text-sm font-bold text-neutral-800 group-hover:text-neutral-900 transition-colors line-clamp-1">
+                    {{ item.title }}
+                  </h4>
+                  <p class="text-[11px] text-neutral-400 leading-relaxed line-clamp-2">
+                    主核心節點: <span class="font-semibold text-neutral-500 font-mono">{{ item.data?.text || '未指定' }}</span>
+                  </p>
+                </div>
+              </div>
+
+              <!-- Card Bottom controls -->
+              <div class="mt-6 pt-4 border-t border-neutral-100 flex items-center justify-between bg-white relative z-10">
+                <button 
+                  @click="deleteMindmap(item.id)"
+                  class="text-neutral-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all duration-200 cursor-pointer"
+                  title="永久刪除"
+                >
+                  <TrashIcon class="w-4 h-4" />
+                </button>
+                
+                <Link 
+                  :href="`/mindmaps/${item.id}`"
+                  class="flex items-center gap-1 text-xs font-bold text-neutral-800 hover:text-[#FACC15] transition-colors uppercase tracking-wider"
+                >
+                  <span>編輯藍圖</span>
+                  <ArrowRightIcon class="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty State (Bento-styled) -->
           <div 
-            v-for="item in mindmaps" 
-            :key="item.id"
-            class="bg-white rounded-2xl border border-neutral-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group"
+            v-else 
+            class="border border-neutral-100 rounded-2xl p-12 text-center max-w-lg mx-auto bg-[#F9FAFB]/50 backdrop-blur-md shadow-sm space-y-6"
           >
-            <!-- Card Header -->
-            <div class="p-5 space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-                  <FileIcon class="w-4 h-4" />
-                </span>
-                <span class="text-[10px] text-neutral-400 font-medium flex items-center gap-1">
-                  <CalendarIcon class="w-3 h-3" />
-                  <span>{{ formatDate(item.updated_at) }}</span>
-                </span>
-              </div>
-              
-              <div class="space-y-1">
-                <h4 class="text-sm font-bold text-neutral-800 group-hover:text-purple-600 transition-colors line-clamp-1">
-                  {{ item.title }}
-                </h4>
-                <p class="text-[11px] text-neutral-400 line-clamp-2">
-                  節點樹根名稱: {{ item.data?.text || '未指定' }}
-                </p>
-              </div>
+            <div class="w-12 h-12 rounded-full bg-[#1A1A1A] text-white flex items-center justify-center mx-auto">
+              <FileIcon class="w-5 h-5 text-[#FACC15]" />
             </div>
-
-            <!-- Card Actions -->
-            <div class="px-5 py-3.5 bg-neutral-50/50 border-t border-neutral-50 flex items-center justify-between">
-              <button 
-                @click="deleteMindmap(item.id)"
-                class="text-neutral-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors cursor-pointer"
-                title="刪除心智圖"
-              >
-                <TrashIcon class="w-4 h-4" />
-              </button>
-              
-              <Link 
-                :href="`/mindmaps/${item.id}`"
-                class="flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 transition-colors"
-              >
-                <span>進入編輯</span>
-                <ArrowRightIcon class="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
-              </Link>
+            
+            <div class="space-y-2">
+              <h4 class="text-sm font-bold text-neutral-800">尚未建立任何心智圖設計</h4>
+              <p class="text-xs text-neutral-400 leading-relaxed">
+                開始新增您的第一個架構心智圖，利用系統自動化的 12 層級 AI 技術雷達與 ERD 關聯設計，加速您的開發計畫。
+              </p>
             </div>
+            
+            <button
+              @click="createNewMindmap"
+              :disabled="isCreating"
+              class="px-6 py-2.5 bg-[#1A1A1A] hover:bg-[#2c2c2c] text-white rounded-lg text-xs font-bold uppercase tracking-widest shadow-md transition-all duration-300 disabled:opacity-50 cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <span v-if="isCreating" class="w-3.5 h-3.5 border-2 border-t-transparent border-white rounded-full animate-spin"></span>
+              <PlusIcon v-else class="w-3.5 h-3.5 text-[#FACC15]" />
+              <span>建立第一個設計圖</span>
+            </button>
           </div>
-        </div>
-
-        <!-- Empty state -->
-        <div 
-          v-else 
-          class="bg-white rounded-2xl border border-neutral-100 p-12 text-center max-w-xl mx-auto shadow-sm space-y-4"
-        >
-          <div class="w-12 h-12 rounded-full bg-neutral-50 text-neutral-400 flex items-center justify-center mx-auto">
-            <FileIcon class="w-6 h-6" />
-          </div>
-          <div class="space-y-1">
-            <h4 class="text-sm font-bold text-neutral-800">尚未建立任何心智圖</h4>
-            <p class="text-xs text-neutral-400">建立第一個心智圖專案，開始利用 12 層 AI 漸進分析快速設計您的軟體工程藍圖！</p>
-          </div>
-          <button
-            @click="createNewMindmap"
-            :disabled="isCreating"
-            class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all disabled:opacity-50 cursor-pointer inline-flex items-center gap-1.5"
-          >
-            <span v-if="isCreating" class="w-3.5 h-3.5 border-2 border-t-transparent border-white rounded-full animate-spin"></span>
-            <PlusIcon v-else class="w-3.5 h-3.5" />
-            <span>建立第一個專案</span>
-          </button>
         </div>
       </div>
     </div>
