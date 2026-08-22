@@ -622,6 +622,13 @@ const openNodePropertiesModal = (nodeId) => {
   }
 }
 
+const deleteNodeAndCloseModal = (nodeId) => {
+  if (confirm('確定要刪除此節點與其底下的所有子節點嗎？')) {
+    deleteNode(nodeId)
+    showNodePropertiesModal.value = false
+  }
+}
+
 const generateNodeDetailsForSelected = async (node) => {
   if (!node) return
   aiDetailsLoading.value = true
@@ -2200,8 +2207,21 @@ const selectedMultiProposalsCount = computed(() => {
           </div>
 
           <!-- Footer -->
-          <div class="p-5 border-t border-neutral-100 flex items-center justify-end gap-3 bg-neutral-50/50">
-            <button @click="showNodePropertiesModal = false" class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"><CheckIcon class="w-3.5 h-3.5" /><span>完成修改</span></button>
+          <div class="p-5 border-t border-neutral-100 flex items-center justify-between bg-neutral-50/50">
+            <div>
+              <button 
+                v-if="nodeToEdit.id !== 'root'"
+                @click="deleteNodeAndCloseModal(nodeToEdit.id)"
+                class="px-4 py-2 border border-red-200 hover:bg-red-50 text-red-600 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <TrashIcon class="w-3.5 h-3.5 animate-pulse" />
+                <span>刪除此節點</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <button @click="showNodePropertiesModal = false" class="px-4 py-2 border border-neutral-200 hover:bg-neutral-100 text-neutral-700 rounded-xl text-xs font-semibold transition-colors">取消</button>
+              <button @click="showNodePropertiesModal = false" class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"><CheckIcon class="w-3.5 h-3.5" /><span>完成修改</span></button>
+            </div>
           </div>
         </div>
       </div>
