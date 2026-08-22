@@ -34,6 +34,7 @@ const resetIdleTimer = () => {
 }
 
 const triggerAutoSave = async () => {
+  if (!isDirty.value) return
   isSaving.value = true
   try {
     const res = await window.axios.post('/mindmaps', {
@@ -47,6 +48,7 @@ const triggerAutoSave = async () => {
     })
     if (res.data.success) {
       showAutoSaveModal.value = true
+      isDirty.value = false
     }
   } catch (e) {
     console.error('自動儲存失敗：', e)
@@ -54,6 +56,16 @@ const triggerAutoSave = async () => {
     isSaving.value = false
   }
 }
+
+// Dirty state tracking to prevent saving without edits
+const isDirty = ref(false)
+const isLoaded = ref(false)
+
+watch(() => mindmap.value, (newVal) => {
+  if (isLoaded.value && newVal) {
+    isDirty.value = true
+  }
+}, { deep: true })
 
 const saveToDatabase = async () => {
   isSaving.value = true
@@ -69,6 +81,7 @@ const saveToDatabase = async () => {
     })
     if (res.data.success) {
       alert('儲存成功！')
+      isDirty.value = false
     }
   } catch (e) {
     alert('儲存失敗：' + (e.response?.data?.message || e.message))
@@ -76,6 +89,80 @@ const saveToDatabase = async () => {
     isSaving.value = false
   }
 }
+
+// Project Reader state & actions
+const showProjectReaderModal = ref(false)
+const projects = ref([])
+const selectedProject = ref('')
+const projectFiles = ref([])
+const fileFilter = ref('')
+const selectedFile = ref(null)
+const selectedFileContent = ref('')
+const isFileLoading = ref(false)
+const isTreeLoading = ref(false)
+const isProjectsLoading = ref(false)
+
+const openProjectReader = async () => {
+  showProjectReaderModal.value = true
+  isProjectsLoading.value = true
+  try {
+    const res = await window.axios.get('/api/projects')
+    if (res.data.success) {
+      projects.value = res.data.projects
+      if (projects.value.length > 0 && !selectedProject.value) {
+        selectProject(projects.value[0].name)
+      }
+    }
+  } catch (e) {
+    console.error('取得專案清單失敗：', e)
+  } finally {
+    isProjectsLoading.value = false
+  }
+}
+
+const selectProject = async (projectName) => {
+  selectedProject.value = projectName
+  isTreeLoading.value = true
+  selectedFile.value = null
+  selectedFileContent.value = ''
+  try {
+    const res = await window.axios.post('/api/projects/tree', { project: projectName })
+    if (res.data.success) {
+      projectFiles.value = res.data.files
+    }
+  } catch (e) {
+    console.error('取得檔案樹失敗：', e)
+  } finally {
+    isTreeLoading.value = false
+  }
+}
+
+const selectFile = async (file) => {
+  selectedFile.value = file
+  isFileLoading.value = true
+  selectedFileContent.value = ''
+  try {
+    const res = await window.axios.post('/api/projects/read', {
+      project: selectedProject.value,
+      file_path: file.relative_path
+    })
+    if (res.data.success) {
+      selectedFileContent.value = res.data.content
+    }
+  } catch (e) {
+    selectedFileContent.value = '讀取檔案失敗：' + (e.response?.data?.message || e.message)
+  } finally {
+    isFileLoading.value = false
+  }
+}
+
+const filteredFiles = computed(() => {
+  if (!fileFilter.value.trim()) return projectFiles.value
+  const filter = fileFilter.value.toLowerCase()
+  return projectFiles.value.filter(f => 
+    f.relative_path.toLowerCase().includes(filter) || f.name.toLowerCase().includes(filter)
+  )
+})
 
 import { 
   Menu as MenuIcon, 
@@ -307,6 +394,11 @@ onMounted(() => {
     window.addEventListener(evt, resetIdleTimer)
   })
   resetIdleTimer()
+
+  nextTick(() => {
+    isLoaded.value = true
+    isDirty.value = false
+  })
 })
 
 onUnmounted(() => {
@@ -1499,6 +1591,13 @@ const selectedMultiProposalsCount = computed(() => {
             <span>匯出 JSON</span>
           </button>
           <button 
+            @click="openProjectReader"
+            class="flex items-center gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+          >
+            <BookOpenIcon class="w-3.5 h-3.5" />
+            <span>讀取專案代碼</span>
+          </button>
+          <button 
             @click="saveToDatabase"
             :disabled="isSaving"
             class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-40 cursor-pointer"
@@ -2372,6 +2471,131 @@ const selectedMultiProposalsCount = computed(() => {
           >
             我知道了
           </button>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Project Reader Modal -->
+    <transition
+      enter-active-class="transition-all duration-300 ease-out"
+      leave-active-class="transition-all duration-200 ease-in"
+      enter-from-class="opacity-0 scale-95"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div 
+        v-if="showProjectReaderModal"
+        class="fixed inset-0 bg-neutral-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6"
+      >
+        <div class="bg-white rounded-2xl w-full max-w-6xl h-[85vh] shadow-2xl flex flex-col overflow-hidden border border-neutral-100">
+          <!-- Header -->
+          <div class="p-5 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50 shrink-0 select-none">
+            <div>
+              <h2 class="text-sm font-bold text-neutral-800 flex items-center gap-1.5">
+                <BookOpenIcon class="w-4 h-4 text-purple-600" />
+                <span>皇榳專案代碼唯讀檢視器</span>
+              </h2>
+              <p class="text-[10px] text-neutral-400 mt-0.5">唯讀模式瀏覽本地主機開發目錄下的專案原始碼</p>
+            </div>
+            <button @click="showProjectReaderModal = false" class="p-1 hover:bg-neutral-200/50 rounded-lg text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer">
+              <CloseIcon class="w-4 h-4" />
+            </button>
+          </div>
+
+          <!-- Grid Container -->
+          <div class="flex-1 flex min-h-0">
+            <!-- Sidebar (Project Selection & File Tree) -->
+            <div class="w-80 border-r border-neutral-100 flex flex-col p-4 space-y-4 shrink-0 bg-neutral-50/20 select-none">
+              <!-- Project Selector Dropdown -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">選擇專案 (Project)</label>
+                <div v-if="isProjectsLoading" class="text-xs text-neutral-400 p-2">載入專案中...</div>
+                <select 
+                  v-else
+                  v-model="selectedProject" 
+                  @change="selectProject($event.target.value)"
+                  class="w-full bg-white border border-neutral-200 rounded-lg px-3 py-2 text-xs text-neutral-700 font-semibold focus:outline-none focus:border-neutral-300 transition-colors"
+                >
+                  <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
+                </select>
+              </div>
+
+              <!-- File Search Filter -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">搜尋檔案 (Search)</label>
+                <input 
+                  v-model="fileFilter"
+                  type="text"
+                  placeholder="輸入檔名過濾..."
+                  class="w-full bg-white border border-neutral-200 rounded-lg px-3 py-2 text-xs text-neutral-700 placeholder:text-neutral-300 focus:outline-none focus:border-neutral-300 transition-colors"
+                />
+              </div>
+
+              <!-- File List -->
+              <div class="flex-1 min-h-0 flex flex-col space-y-1">
+                <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">檔案列表 (Files)</label>
+                
+                <div v-if="isTreeLoading" class="flex-1 flex items-center justify-center text-xs text-neutral-400">
+                  <span class="w-4 h-4 border-2 border-t-transparent border-neutral-400 rounded-full animate-spin mr-1.5"></span>
+                  <span>掃描檔案結構...</span>
+                </div>
+                <div v-else-if="filteredFiles.length === 0" class="flex-1 flex items-center justify-center text-xs text-neutral-300">
+                  無匹配的檔案
+                </div>
+                <div v-else class="flex-1 overflow-y-auto space-y-0.5 pr-1 font-mono text-xs">
+                  <button 
+                    v-for="file in filteredFiles" 
+                    :key="file.relative_path"
+                    @click="selectFile(file)"
+                    class="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-neutral-100 transition-colors flex flex-col justify-start select-text cursor-pointer"
+                    :class="[selectedFile?.relative_path === file.relative_path ? 'bg-purple-50 text-purple-700 font-semibold' : 'text-neutral-600']"
+                  >
+                    <span class="truncate block w-full text-[11px]">{{ file.name }}</span>
+                    <span class="text-[8px] opacity-40 truncate block w-full">{{ file.relative_path }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Content Area (Code Preview) -->
+            <div class="flex-1 flex flex-col min-h-0 bg-neutral-950 p-4 relative">
+              <!-- Selected File Header -->
+              <div v-if="selectedFile" class="mb-3 flex items-center justify-between border-b border-white/5 pb-2 shrink-0 select-none">
+                <div class="font-mono text-xs text-neutral-400">
+                  <span class="text-neutral-500 font-bold mr-1">{{ selectedProject }}</span> / {{ selectedFile.relative_path }}
+                </div>
+                <span class="text-[9px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">唯讀模式</span>
+              </div>
+
+              <!-- Loading spinner -->
+              <div v-if="isFileLoading" class="absolute inset-0 flex items-center justify-center bg-neutral-950/80 z-10">
+                <div class="text-center space-y-2">
+                  <span class="w-6 h-6 border-2 border-t-transparent border-purple-500 rounded-full animate-spin block mx-auto"></span>
+                  <span class="text-xs text-neutral-400 font-mono">讀取檔案中...</span>
+                </div>
+              </div>
+
+              <!-- Code Preview Box -->
+              <div class="flex-1 min-h-0 overflow-auto">
+                <pre v-if="selectedFileContent" class="m-0 p-2 font-mono text-xs text-neutral-200 select-text leading-relaxed tab-size-4"><code class="block whitespace-pre">{{ selectedFileContent }}</code></pre>
+                <div v-else-if="!selectedFile" class="h-full flex items-center justify-center text-xs text-neutral-600 font-mono select-none">
+                  請在左側選擇一個專案檔案進行檢視
+                </div>
+                <div v-else class="h-full flex items-center justify-center text-xs text-neutral-600 font-mono select-none">
+                  檔案為空
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="p-4 border-t border-neutral-100 flex justify-end bg-neutral-50/50 shrink-0 select-none">
+            <button 
+              @click="showProjectReaderModal = false"
+              class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+            >
+              關閉檢視器
+            </button>
+          </div>
         </div>
       </div>
     </transition>
