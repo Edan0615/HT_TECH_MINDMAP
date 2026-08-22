@@ -1281,6 +1281,8 @@ const selectedMultiProposalsCount = computed(() => {
           v-if="showAiPanel"
           :selected-node="selectedNode"
           :mindmap="mindmap"
+          v-model:api-endpoint="apiEndpoint"
+          v-model:api-model="apiModel"
           @ai-proposals="onAiProposals"
           @trigger-multistage="triggerMultiStageSetup"
           @add-children="handleAddChildren"

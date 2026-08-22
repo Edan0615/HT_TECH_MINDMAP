@@ -150,14 +150,37 @@ const props = defineProps({
   mindmap: {
     type: Object,
     default: null
+  },
+  apiEndpoint: {
+    type: String,
+    required: true
+  },
+  apiModel: {
+    type: String,
+    required: true
   }
 })
 
-const emit = defineEmits(['ai-proposals', 'trigger-multistage'])
+const emit = defineEmits(['ai-proposals', 'trigger-multistage', 'update:apiEndpoint', 'update:apiModel'])
 
 const showSettings = ref(false)
-const apiEndpoint = ref(localStorage.getItem('mindmap_ai_endpoint') || 'http://100.108.52.6:8888')
-const apiModel = ref((localStorage.getItem('mindmap_ai_model') && localStorage.getItem('mindmap_ai_model') !== 'gpt-3.5-turbo') ? localStorage.getItem('mindmap_ai_model') : 'gemma-4-12B-it-Q6_K.gguf')
+
+const apiEndpoint = computed({
+  get: () => props.apiEndpoint,
+  set: (val) => {
+    emit('update:apiEndpoint', val)
+    localStorage.setItem('mindmap_ai_endpoint', val)
+  }
+})
+
+const apiModel = computed({
+  get: () => props.apiModel,
+  set: (val) => {
+    emit('update:apiModel', val)
+    localStorage.setItem('mindmap_ai_model', val)
+  }
+})
+
 const systemPrompt = ref(
   '你是一位優秀的系統分析師與軟體架構師。請以繁體中文回答，先提供簡要分析報告，並必須在回答的最後附帶一個 JSON 格式的調整動作清單。該清單以標記 ```json 和 ``` 包裹。JSON 格式必須為一個陣列，包含 add (新增)、delete (刪除)、update (修改) 三種指令物件：\n[\n  { "type": "add", "target": "父節點名稱", "text": "新節點名稱" },\n  { "type": "delete", "target": "要刪除的節點名稱" },\n  { "type": "update", "target": "要修改的節點名稱", "text": "修改後的新名稱" }\n]'
 )
