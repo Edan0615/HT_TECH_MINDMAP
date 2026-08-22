@@ -25,7 +25,8 @@ import {
   BookOpen as BookOpenIcon,
   ChevronDown as ChevronDownIcon,
   ChevronUp as ChevronUpIcon,
-  Loader2 as SpinnerIcon
+  Loader2 as SpinnerIcon,
+  Send as SendIcon
 } from '@lucide/vue'
 
 const {
@@ -85,6 +86,8 @@ const stageIsThinking = ref([false, false, false, false, false, false, false, fa
 const stageThoughts = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
 const showThoughtsCollapse = ref([false, false, false, false, false, false, false, false, false, false, false, false])
 const showStagesAccordion = ref([true, true, true, true, true, true, true, true, true, true, true, true])
+const stageRefinePrompts = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
+const stageIsRefining = ref([false, false, false, false, false, false, false, false, false, false, false, false])
 
 // Pre-flight preferences
 const isUserEngineer = ref(true)
@@ -602,6 +605,125 @@ const handleAddChildren = (parentId, childTexts) => {
 
 const handleUpdateText = (nodeId, newText) => {
   updateNodeText(nodeId, newText)
+}
+
+const refineStageOutput = async (idx) => {
+  const userFeedback = stageRefinePrompts.value[idx].trim()
+  if (!userFeedback) return
+
+  stageIsRefining.value[idx] = true
+  const originalOutput = stageOutputs.value[idx]
+  stageOutputs.value[idx] = '' // clear to stream new content
+  
+  const apiEndpointVal = apiEndpoint.value
+  const apiModelVal = apiModel.value
+  const fullMindmapJson = JSON.stringify(mindmap.value, null, 2)
+  const stageName = stagesProgress.value[idx].name
+
+  const selectedMbtiObj = mbtiOptions.find(o => o.value === mbtiStyle.value)
+  const mbtiStyleInstructions = `請採用「${selectedMbtiObj ? selectedMbtiObj.label : mbtiStyle.value}」性格的表達口吻進行全繁體中文輸出。`
+  const roleInstruction = isUserEngineer.value
+    ? '讀者是「專業軟體工程師」，請務必使用精確的技術專有名詞、程式架構、設計模式進行專業解說。'
+    : '讀者是「非技術人員」，請以通俗易懂的平實白話文，搭配生活中的譬喻進行 analysis。'
+
+  const refinePrompt = `當前整個心智圖設計文件的完整 JSON 結構如下：
+\`\`\`json
+${fullMindmapJson}
+\`\`\`
+
+目前我們正在對【${stageName}】這一層的技術報告進行局部的針對性修改。
+
+該層原本的報告內容如下：
+\`\`\`html
+${originalOutput}
+\`\`\`
+
+使用者提出的修改意見與指示如下：
+「${userFeedback}」
+
+任務指示：
+請依據使用者的修改意見，重新撰寫或優化這部分報告。
+重要規定與表達風格：
+- ${mbtiStyleInstructions}
+- ${roleInstruction}
+- 請「務必保留原有的 HTML 與 Bootstrap 5 樣式類別（例如 <div class="card mb-3">、<span class="badge"> 等）進行格式化排版輸出」，不要輸出純 Markdown 格式段落。
+- 若本層有涉及評分（Rubric JSON），請在回答的結尾同樣輸出一個獨立的 JSON 區塊（使用 \`\`\`json 和 \`\`\` 包裹）以更新分數：
+\`\`\`json
+{
+  "stage_score": 新分數,
+  "stage_rubric_reason": "說明修改後的分數理由"
+}
+\`\`\`
+- 若本層包含雷達圖數據或 Mermaid 流程圖代碼，請務必在輸出的內容中保留或相應修改對應的 \`\`\`json (feasibility_scores) 或 \`\`\`mermaid 代碼塊，以便前端正常渲染。
+- 直接開始輸出修改後的完整報告內容，不要有任何客套話與廢話。`
+
+  try {
+    const res = await fetch(`${apiEndpointVal}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: apiModelVal,
+        messages: [
+          { role: 'system', content: '你是一位優秀的資深軟體架構師。請根據使用者的意見修改指定分析層的 HTML 報告。' },
+          { role: 'user', content: refinePrompt }
+        ],
+        temperature: 0.7,
+        stream: true
+      })
+    })
+
+    if (!res.ok) {
+      throw new Error(`HTTP 錯誤 ${res.status}: ${res.statusText || '連線失敗'}`)
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder("utf-8")
+    let finished = false
+    let buffer = ''
+
+    while (!finished) {
+      const { value, done } = await reader.read()
+      if (done) {
+        finished = true
+        break
+      }
+      
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop()
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed === 'data: [DONE]') continue
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const parsed = JSON.parse(trimmed.slice(6))
+            const delta = parsed.choices[0]?.delta
+            if (delta?.content) {
+              stageOutputs.value[idx] += delta.content
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    if (buffer && buffer.startsWith('data: ')) {
+      try {
+        const parsed = JSON.parse(buffer.slice(6))
+        const delta = parsed.choices[0]?.delta
+        if (delta?.content) {
+          stageOutputs.value[idx] += delta.content
+        }
+      } catch (e) {}
+    }
+
+    stageRefinePrompts.value[idx] = '' // clear input
+  } catch (error) {
+    alert(`修改失敗: ${error.message}`)
+    stageOutputs.value[idx] = originalOutput // restore
+  } finally {
+    stageIsRefining.value[idx] = false
+  }
 }
 
 const handleClear = () => {
@@ -1728,6 +1850,36 @@ const selectedMultiProposalsCount = computed(() => {
                         :code="parseAndRenderContent(stageOutputs[idx]).mermaidCode" 
                         :id="stage.id" 
                       />
+
+                      <!-- Interactive Stage Refinement Chatbox (Visible only after all 12 stages are completed) -->
+                      <div 
+                        v-if="hasStartedMultiStage && !isMultiStageRunning && stagesProgress.every(s => s.status === 'success' || s.status === 'error') && stageOutputs[idx]" 
+                        class="mt-4 pt-3.5 border-t border-neutral-100 space-y-2 select-none"
+                      >
+                        <div class="flex items-center gap-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wide">
+                          <SparklesIcon class="w-3 h-3 text-purple-600 animate-pulse" />
+                          <span>微調本層分析（告訴 AI 如何修改）：</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <input 
+                            v-model="stageRefinePrompts[idx]"
+                            @keydown.enter.prevent="refineStageOutput(idx)"
+                            :disabled="stageIsRefining[idx]"
+                            type="text"
+                            placeholder="請輸入針對本層的修改指示（例如：「加入 Redis 快取規劃」、「更換為 MongoDB schema」等）..."
+                            class="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 text-[11px] text-neutral-700 font-medium focus:outline-none focus:border-neutral-300 transition-colors disabled:opacity-50"
+                          />
+                          <button 
+                            @click="refineStageOutput(idx)"
+                            :disabled="stageIsRefining[idx] || !stageRefinePrompts[idx].trim()"
+                            class="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-[11px] font-semibold transition-colors disabled:opacity-40 flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                          >
+                            <SpinnerIcon v-if="stageIsRefining[idx]" class="w-3 h-3 animate-spin" />
+                            <SendIcon v-else class="w-3 h-3" />
+                            <span>{{ stageIsRefining[idx] ? '修改中...' : '送出' }}</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
