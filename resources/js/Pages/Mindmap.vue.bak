@@ -6,10 +6,6 @@ import { parseMermaidToTree, parseRawJson } from '@/utils/codeParser'
 import DocumentOutline from '@/components/DocumentOutline.vue'
 import MindmapCanvas from '@/components/MindmapCanvas.vue'
 import AiPanel from '@/components/AiPanel.vue'
-import ImportCodeModal from '@/components/ImportCodeModal.vue'
-import AiProposalsModal from '@/components/AiProposalsModal.vue'
-import NodeDetailsDrawer from '@/components/NodeDetailsDrawer.vue'
-import MultiStageModal from '@/components/MultiStageModal.vue'
 
 const props = defineProps({
   mindmap: {
@@ -776,7 +772,121 @@ const scrollToStage = (id) => {
 }
 
 // Inline component definitions
-// Extracted local component definitions
+const MermaidRender = defineComponent({
+  props: {
+    code: { type: String, required: true },
+    id: { type: [String, Number], required: true }
+  },
+  setup(props) {
+    const svgHtml = ref('')
+    const loading = ref(false)
+
+    const render = async () => {
+      if (!props.code.trim()) return
+      loading.value = true
+      try {
+        const loadM = () => {
+          if (window.mermaid) return Promise.resolve(window.mermaid)
+          return new Promise(r => setTimeout(() => r(loadM()), 200))
+        }
+        const m = await loadM()
+        const elementId = `mermaid-svg-${props.id}-${Math.random().toString(36).substr(2, 9)}`
+        const { svg } = await m.render(elementId, props.code)
+        svgHtml.value = svg
+      } catch (e) {
+        svgHtml.value = `<div class="text-neutral-400 text-[10px] italic">Mermaid 語法編譯中...</div>`
+      } finally {
+        loading.value = false
+      }
+    }
+
+    watch(() => props.code, render, { immediate: true })
+
+    return () => h('div', {
+      class: 'mt-4 border border-purple-100 rounded-xl bg-purple-50/10 p-4'
+    }, [
+      h('div', { class: 'text-[10px] font-bold text-purple-600 uppercase tracking-wide mb-2' }, 'Mermaid 流程圖即時渲染：'),
+      h('div', {
+        class: 'flex justify-center bg-white p-4 border border-neutral-100 rounded-lg overflow-x-auto',
+        innerHTML: svgHtml.value
+      })
+    ])
+  }
+})
+
+const FeasibilityRadarChart = defineComponent({
+  props: {
+    scores: { type: Object, required: true }
+  },
+  setup(props) {
+    const canvasRef = ref(null)
+    let chartInstance = null
+
+    const renderChart = async () => {
+      if (!canvasRef.value) return
+      
+      const loadC = () => {
+        if (window.Chart) return Promise.resolve(window.Chart)
+        return new Promise(r => setTimeout(() => r(loadC()), 200))
+      }
+      
+      const Chart = await loadC()
+      
+      if (chartInstance) {
+        chartInstance.destroy()
+      }
+
+      const ctx = canvasRef.value.getContext('2d')
+      chartInstance = new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels: ['Laravel 整合度', 'Vue 匹配密合度', '資料庫適配性', '技術團隊維護度', '開發迭代效能'],
+          datasets: [{
+            label: '技術可行性分析評分 (越接近 Laravel Vue 越高分)',
+            data: [
+              props.scores.laravel_integration || 80,
+              props.scores.vue_compatibility || 80,
+              props.scores.database_performance || 80,
+              props.scores.maintenance_ease || 80,
+              props.scores.development_speed || 80
+            ],
+            backgroundColor: 'rgba(139, 92, 246, 0.2)',
+            borderColor: 'rgb(139, 92, 246)',
+            pointBackgroundColor: 'rgb(139, 92, 246)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgb(139, 92, 246)',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            r: {
+              angleLines: { display: true },
+              suggestedMin: 0,
+              suggestedMax: 100,
+              ticks: { stepSize: 20 }
+            }
+          }
+        }
+      })
+    }
+
+    onMounted(renderChart)
+    watch(() => props.scores, renderChart, { deep: true })
+
+    return () => h('div', {
+      class: 'mt-4 border border-blue-100 rounded-xl bg-blue-50/10 p-4'
+    }, [
+      h('div', { class: 'text-[10px] font-bold text-blue-600 uppercase tracking-wide mb-2' }, '技術可行性評分雷達圖 (Chart.js Radar)：'),
+      h('div', { class: 'w-full h-72 bg-white p-4 border border-neutral-100 rounded-lg' }, [
+        h('canvas', { ref: canvasRef })
+      ])
+    ])
+  }
+})
 
 const onTemplateChange = (e) => {
   loadTemplate(e.target.value)
@@ -2353,18 +2463,106 @@ const selectedMultiProposalsCount = computed(() => {
         />
 
         <!-- Collapsible Bottom Node Details & Execution Plan Drawer -->
-        <NodeDetailsDrawer
-          :show="showDetailsPanel"
-          :selected-node="selectedNode"
-          :ai-details-loading="aiDetailsLoading"
-          @close="showDetailsPanel = false"
-          @generateDetails="generateNodeDetails"
-          @updateDetails="val => updateNodeDetails(selectedNode.id, val)"
-          @addProperty="addCustomProperty"
-          @renameProperty="({ oldKey, newKey }) => renamePropertyKey(oldKey, newKey)"
-          @updateProperty="({ key, val }) => updatePropertyValue(key, val)"
-          @deleteProperty="key => deleteProperty(key)"
-        />
+        <transition
+          enter-active-class="transition-all duration-300 ease-out"
+          leave-active-class="transition-all duration-200 ease-in"
+          enter-from-class="translate-y-full opacity-0"
+          leave-to-class="translate-y-full opacity-0"
+        >
+          <div 
+            v-if="showDetailsPanel && selectedNode"
+            class="h-72 bg-white border-t border-neutral-100 flex flex-col shrink-0 relative z-20 shadow-lg"
+          >
+            <!-- Drawer Header -->
+            <div class="h-10 px-6 border-b border-neutral-100 bg-neutral-50/50 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full" :style="{ backgroundColor: selectedNode.color }"></div>
+                <span class="text-xs font-semibold text-neutral-700">節點設計明細與實作計劃：{{ selectedNode.text }}</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <button 
+                  @click="generateNodeDetails"
+                  :disabled="aiDetailsLoading"
+                  class="flex items-center gap-1.5 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <SparklesIcon class="w-3 h-3 animate-pulse" />
+                  <span>{{ aiDetailsLoading ? 'AI 正在撰寫計畫...' : '🤖 AI 產生詳細實作計劃與 Mermaid 流程圖' }}</span>
+                </button>
+                <button 
+                  @click="showDetailsPanel = false"
+                  class="p-0.5 hover:bg-neutral-200/50 rounded-md text-neutral-400 hover:text-neutral-700"
+                >
+                  <ChevronDownIcon class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <!-- Drawer Content Panel -->
+            <div class="flex-1 flex min-h-0 divide-x divide-neutral-100 p-4 gap-4">
+              <!-- Left side: Detailed Description and Plan -->
+              <div class="flex-1 flex flex-col space-y-2 min-w-0">
+                <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">📝 功能明細與開發計畫</label>
+                <textarea 
+                  v-model="selectedNode.details"
+                  @input="e => updateNodeDetails(selectedNode.id, e.target.value)"
+                  placeholder="貼入或在這裡撰寫該節點的詳細功能描述、規格說明、執行計劃、或 Mermaid 流程代碼..."
+                  class="w-full flex-1 p-3 bg-neutral-50 border border-neutral-100 rounded-xl focus:outline-none focus:border-neutral-200 font-mono text-xs text-neutral-700 placeholder:text-neutral-300 resize-none select-text animate-fade-in"
+                ></textarea>
+              </div>
+
+              <!-- Right side: JSON Custom Attributes -->
+              <div class="w-80 pl-4 flex flex-col space-y-2 shrink-0">
+                <div class="flex items-center justify-between">
+                  <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">📊 節點自訂屬性 (JSON Properties)</label>
+                  <button 
+                    @click="addCustomProperty" 
+                    class="px-2 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 rounded-lg text-[9px] font-bold transition-all cursor-pointer"
+                  >
+                    ➕ 新增欄位
+                  </button>
+                </div>
+                
+                <!-- Properties List -->
+                <div class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
+                  <div v-if="!selectedNode.properties || Object.keys(selectedNode.properties || {}).length === 0" class="h-full flex items-center justify-center text-[10px] text-neutral-400 italic">
+                    尚未設定自訂欄位。點擊上方新增。
+                  </div>
+                  <div 
+                    v-else
+                    v-for="(val, key) in selectedNode.properties" 
+                    :key="key"
+                    class="flex items-center gap-1.5 bg-neutral-50 p-2 rounded-lg border border-neutral-100"
+                  >
+                    <!-- Key Input -->
+                    <input 
+                      type="text" 
+                      :value="key" 
+                      @blur="e => renamePropertyKey(key, e.target.value.trim())"
+                      placeholder="欄位名"
+                      class="w-20 bg-white border border-neutral-200 rounded px-1.5 py-0.5 text-[10px] font-bold text-neutral-700 focus:border-purple-300 outline-none"
+                    />
+                    <span class="text-neutral-400 font-bold">:</span>
+                    <!-- Value Input -->
+                    <input 
+                      type="text" 
+                      :value="val" 
+                      @input="e => updatePropertyValue(key, e.target.value)"
+                      placeholder="值內容"
+                      class="flex-1 bg-white border border-neutral-200 rounded px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 focus:border-purple-300 outline-none select-text"
+                    />
+                    <!-- Delete Button -->
+                    <button 
+                      @click="deleteProperty(key)"
+                      class="p-1 hover:bg-red-50 text-neutral-400 hover:text-red-500 rounded transition-all cursor-pointer"
+                    >
+                      <TrashIcon class="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </transition>
       </div>
 
       <!-- Right sidebar: AI Integration Panel -->
@@ -2396,65 +2594,603 @@ const selectedMultiProposalsCount = computed(() => {
     </div>
 
     <!-- AI Suggestion Modal -->
-    <AiProposalsModal 
-      :show="showAiModal" 
-      :proposals="aiProposalActions" 
-      :selected-count="selectedProposalsCount" 
-      @close="showAiModal = false" 
-      @toggleAll="toggleAllProposals" 
-      @apply="applyProposals" 
-    />
+    <transition
+      enter-active-class="transition-all duration-300 ease-out"
+      leave-active-class="transition-all duration-200 ease-in"
+      enter-from-class="opacity-0 scale-95"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div 
+        v-if="showAiModal"
+        class="fixed inset-0 bg-neutral-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 no-select"
+      >
+        <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[85vh] shadow-2xl flex flex-col overflow-hidden border border-neutral-100">
+          <div class="p-5 border-b border-neutral-100 flex items-center justify-between shrink-0 bg-neutral-50/50">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center text-white">
+                <SparklesIcon class="w-4 h-4 animate-pulse" />
+              </div>
+              <div class="flex items-center justify-between">
+                <button @click="toggleAllProposals(true)" class="text-[10px] text-purple-600 hover:underline font-semibold">全選</button>
+                <span class="text-neutral-300 text-[10px]">|</span>
+                <button @click="toggleAllProposals(false)" class="text-[10px] text-neutral-500 hover:underline font-semibold">全不選</button>
+              </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+              <div 
+                v-for="proposal in aiProposalActions" 
+                :key="proposal.id"
+                class="flex items-start gap-3 p-3 rounded-xl border border-neutral-100 hover:border-neutral-200 transition-all"
+                :class="proposal.selected ? 'bg-white shadow-sm' : 'bg-neutral-50/50 opacity-60'"
+              >
+                <input v-model="proposal.selected" type="checkbox" class="mt-1 rounded text-purple-600 border-neutral-300 focus:ring-purple-400 w-4 h-4 cursor-pointer" />
+                <div class="flex-1 text-xs">
+                  <div class="flex items-center gap-1.5 mb-1.5">
+                    <span v-if="proposal.type === 'add'" class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">新增</span>
+                    <span v-else-if="proposal.type === 'delete'" class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-50 text-red-700 border border-red-100">刪除</span>
+                    <span v-else-if="proposal.type === 'update'" class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">修改</span>
+                    <span class="text-[10px] text-neutral-400">目標位置: 「{{ proposal.target }}」</span>
+                  </div>
+                  <div class="text-neutral-700 font-medium">
+                    <template v-if="proposal.type === 'add'">在「{{ proposal.target }}」底下新增子項目：「{{ proposal.text }}」</template>
+                    <template v-else-if="proposal.type === 'delete'">將節點「{{ proposal.target }}」及其所有子項目刪除</template>
+                    <template v-else-if="proposal.type === 'update'">將節點「{{ proposal.target }}」文字修改為：「{{ proposal.text }}」</template>
+                  </div>
+                </div>
+              </div>
+              <div v-if="aiProposalActions.length === 0" class="h-48 flex flex-col items-center justify-center border border-dashed border-neutral-200 rounded-xl text-neutral-400 gap-1.5">
+                <AlertIcon class="w-5 h-5 text-neutral-300" />
+                <span class="text-xs">AI 報告無提出結構性的調整清單</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-5 border-t border-neutral-100 flex items-center justify-between bg-neutral-50/50 shrink-0">
+          <span class="text-xs text-neutral-500">已選取套用 <strong class="text-purple-600 font-semibold">{{ selectedProposalsCount }}</strong> / {{ aiProposalActions.length }} 個變更動作</span>
+          <div class="flex items-center gap-3">
+            <button @click="showAiModal = false" class="px-4 py-2 border border-neutral-200 hover:bg-neutral-100 text-neutral-700 rounded-xl text-xs font-semibold transition-colors">取消</button>
+            <button @click="applyProposals" :disabled="selectedProposalsCount === 0" class="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5"><CheckIcon class="w-3.5 h-3.5" /><span>套用所選變更</span></button>
+          </div>
+        </div>
+      </div>
+    </transition>
 
     <!-- 12-Stage Progressive Multi-stage reasoning Modal -->
-    <MultiStageModal
-      :show="showMultiStageModal"
-      :has-started-multi-stage="hasStartedMultiStage"
-      :is-multi-stage-running="isMultiStageRunning"
-      :is-multi-stage-paused="isMultiStagePaused"
-      :stages-progress="stagesProgress"
-      :stage-outputs="stageOutputs"
-      :stage-logs="stageLogs"
-      :stage-thoughts="stageThoughts"
-      :current-analyzing-stage-index="currentAnalyzingStageIndex"
-      :current-viewed-stage-index="currentViewedStageIndex"
-      :multi-stage-status-message="multiStageStatusMessage"
-      :multi-stage-actions="multiStageActions"
-      :grand-total-score="grandTotalScore"
-      :selected-multi-proposals-count="selectedMultiProposalsCount"
-      :mbti-style="mbtiStyle"
-      :is-user-engineer="isUserEngineer"
-      :allow-ai-read-code="allowAiReadCode"
-      :api-endpoint="apiEndpoint"
-      :api-model="apiModel"
-      :selected-project="selectedProject"
-      :selected-project-user="selectedProjectUser"
-      :project-users="projectUsers"
-      :project-files="projectFiles"
-      :parse-and-render-content="parseAndRenderContent"
-      :copy-to-clipboard="copyToClipboard"
-      @update:mbtiStyle="val => mbtiStyle = val"
-      @update:isUserEngineer="val => isUserEngineer = val"
-      @update:allowAiReadCode="val => allowAiReadCode = val"
-      @update:apiEndpoint="val => apiEndpoint = val"
-      @update:apiModel="val => apiModel = val"
-      @update:selectedProject="val => selectedProject = val"
-      @update:selectedProjectUser="val => selectedProjectUser = val"
-      @update:currentViewedStageIndex="val => currentViewedStageIndex = val"
-      @close="showMultiStageModal = false"
-      @start="triggerMultiStageAnalysisStart"
-      @pause="pauseMultiStageAnalysis"
-      @continue="triggerMultiStageAnalysisStart"
-      @refine="handleRefinementRequest"
-      @applyProposals="applyMultiProposals"
-      @print="generatePrintableReport"
-    />
+    <transition
+      enter-active-class="transition-all duration-300 ease-out"
+      leave-active-class="transition-all duration-200 ease-in"
+      enter-from-class="opacity-0 scale-95"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div 
+        v-if="showMultiStageModal"
+        class="fixed inset-0 bg-neutral-900/40 backdrop-blur-sm z-50 flex items-center justify-center md:p-6 no-select"
+      >
+        <div class="bg-white md:rounded-2xl w-full h-full md:h-[85vh] md:w-4/5 shadow-2xl flex flex-col overflow-hidden border border-neutral-100">
+          <!-- Header -->
+          <div class="p-4 md:p-5 border-b border-neutral-100 flex items-center justify-between shrink-0 bg-neutral-50/50">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center text-white">
+                <SparklesIcon class="w-4 h-4 animate-pulse" />
+              </div>
+              <div class="flex flex-col md:flex-row md:items-center md:gap-3">
+                <h2 class="text-sm font-semibold text-neutral-800">Laravel + Vue 混合架構十三層深度分析區</h2>
+                <div class="flex items-center gap-2 mt-1 md:mt-0">
+                  <p class="text-[10px] md:text-[11px] text-neutral-400 m-0">分層級與客製化偏好，簡化評估、做法、細節與圖表</p>
+                  <button 
+                    @click="showProgressSidebar = !showProgressSidebar"
+                    class="px-2 py-0.5 border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded text-[10px] font-semibold transition-colors"
+                  >
+                    {{ showProgressSidebar ? '◀ 收起進度' : '▶ 展開進度' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button 
+              @click="showMultiStageModal = false"
+              class="p-1 hover:bg-neutral-200/50 rounded-lg text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer"
+            >
+              <CloseIcon class="w-4 h-4" />
+            </button>
+          </div>
+
+          <!-- Pre-flight settings screen (before analysis starts) -->
+          <div v-if="!hasStartedMultiStage" class="flex-1 p-4 md:p-8 flex flex-col items-center justify-center bg-neutral-50/30 overflow-y-auto">
+            <div class="bg-white border border-neutral-100 p-5 md:p-6 rounded-2xl shadow-sm w-full max-w-xl space-y-6">
+              <div class="text-center space-y-1.5">
+                <h3 class="text-sm font-bold text-neutral-800">第一步：配置分析設定與偏好</h3>
+                <p class="text-xs text-neutral-400">客製化 AI 在這十二層架構中的解說與表達口吻</p>
+              </div>
+
+              <div class="space-y-4">
+                <!-- User role choice -->
+                <div class="space-y-2">
+                  <label class="block text-xs font-semibold text-neutral-500 uppercase tracking-wider">讀者身份與專業度</label>
+                  <div class="grid grid-cols-2 gap-3">
+                    <button 
+                      @click="isUserEngineer = true"
+                      class="px-4 py-2.5 border rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                      :class="isUserEngineer ? 'bg-neutral-900 border-neutral-900 text-white shadow-sm' : 'border-neutral-200 hover:bg-neutral-50 text-neutral-700'"
+                    >
+                      <span>專業工程師</span>
+                    </button>
+                    <button 
+                      @click="isUserEngineer = false"
+                      class="px-4 py-2.5 border rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                      :class="!isUserEngineer ? 'bg-neutral-900 border-neutral-900 text-white shadow-sm' : 'border-neutral-200 hover:bg-neutral-50 text-neutral-700'"
+                    >
+                      <span>非工程師 (通俗語言)</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- MBTI Style Dropdown -->
+                <div class="space-y-2">
+                  <label class="block text-xs font-semibold text-neutral-500 uppercase tracking-wider">MBTI 性格口吻表達風格</label>
+                  <select 
+                    v-model="mbtiStyle"
+                    class="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-xs text-neutral-700 font-medium focus:outline-none focus:border-neutral-300 transition-colors"
+                  >
+                    <option v-for="opt in mbtiOptions" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- AI Server Configuration Settings -->
+                <div class="grid grid-cols-2 gap-3.5">
+                  <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-neutral-500 uppercase tracking-wider">AI API 端點 URL</label>
+                    <input 
+                      v-model="apiEndpoint"
+                      type="text"
+                      class="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-xs text-neutral-700 font-medium focus:outline-none focus:border-neutral-300 transition-colors"
+                      placeholder="http://127.0.0.1:8888"
+                    />
+                  </div>
+                  <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-neutral-500 uppercase tracking-wider">AI API 模型名稱</label>
+                    <input 
+                      v-model="apiModel"
+                      type="text"
+                      class="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-xs text-neutral-700 font-medium focus:outline-none focus:border-neutral-300 transition-colors"
+                      placeholder="model-name"
+                    />
+                  </div>
+                </div>
+
+                <div class="p-3.5 bg-neutral-50 rounded-xl border border-neutral-100 text-xs text-neutral-500 space-y-1 leading-relaxed">
+                  <div class="font-semibold text-neutral-600">技術框架規範：</div>
+                  <div>- 分析中提供之範例代碼將優先包含 <strong>HTML, Bootstrap, jQuery</strong> 及 Vue 混合架構。</div>
+                  <div>- 系統將自動理性評估適用之資料庫優缺點並比分，以產出最契合的資料表 Migration 與 ER 圖。</div>
+                </div>
+              </div>
+
+              <!-- Start trigger -->
+              <button 
+                @click="triggerMultiStageAnalysisStart"
+                class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+              >
+                <SparklesIcon class="w-4 h-4 animate-pulse" />
+                <span>🚀 開始進行十三層架構可行性分析</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Body (Main progressive report) -->
+          <div v-else class="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+            <!-- Left Side: Progressive checklist -->
+            <div v-if="showProgressSidebar" class="w-full md:w-1/3 p-4 md:p-6 border-b md:border-b-0 md:border-r border-neutral-100 flex flex-col gap-3 bg-neutral-50/20 shrink-0 font-sans max-h-[35vh] md:max-h-full">
+              <h3 class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">分析進度追蹤</h3>
+              
+              <div class="space-y-3 overflow-y-auto pr-1 flex-1">
+                <div 
+                  v-for="stage in stagesProgress" 
+                  :key="stage.id"
+                  @click="scrollToStage(stage.id)"
+                  class="flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer hover:bg-neutral-100/50"
+                  :class="[
+                    stage.status === 'running' ? 'bg-purple-50/50 border-purple-200 ring-1 ring-purple-100' : '',
+                    stage.status === 'success' ? 'bg-emerald-50/30 border-emerald-100 opacity-90' : '',
+                    stage.status === 'idle' ? 'bg-white border-neutral-100 opacity-60' : ''
+                  ]"
+                >
+                  <!-- Status Indicator -->
+                  <div class="mt-0.5 shrink-0">
+                    <SpinnerIcon v-if="stage.status === 'running'" class="w-4 h-4 text-purple-600 animate-spin" />
+                    <div 
+                      v-else-if="stage.status === 'success'"
+                      class="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center text-white"
+                    >
+                      <CheckIcon class="w-3 h-3 font-bold" />
+                    </div>
+                    <div 
+                      v-else
+                      class="w-4 h-4 rounded-full border border-neutral-300 bg-white"
+                    ></div>
+                  </div>
+
+                  <!-- Text -->
+                  <div>
+                    <div 
+                      class="font-medium text-xs text-neutral-700"
+                      :class="[
+                        stage.status === 'running' ? 'text-purple-700 font-semibold' : '',
+                        stage.status === 'success' ? 'text-emerald-800' : ''
+                      ]"
+                    >
+                      {{ stage.name }}
+                    </div>
+                    <div class="text-[10px] text-neutral-400 mt-1">
+                      <span v-if="stage.status === 'running'" class="text-purple-500 font-medium">分析中...</span>
+                      <span v-else-if="stage.status === 'success'" class="text-emerald-600">已完成</span>
+                      <span v-else>等待中</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Side: VISUALLY SEPARATED Cards with HTML Previews, Math, and Mermaid Renderers -->
+            <div class="w-full md:flex-1 flex flex-col min-h-0 bg-neutral-50/30 font-sans">
+              <!-- Report Area using clean Card Layout -->
+              <div class="flex-1 p-4 md:p-6 overflow-y-auto space-y-4 min-h-0 flex flex-col">
+                <h3 class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">分層架構分析報告明細 (單層沉浸檢視)</h3>
+                
+                <!-- Pagination Controls for Immersive Experience -->
+                <div class="flex items-center justify-between bg-white border border-neutral-200/60 px-4 py-2.5 rounded-xl shadow-sm mb-2 select-none shrink-0">
+                  <button 
+                    @click="currentViewedStageIndex = Math.max(0, currentViewedStageIndex - 1)"
+                    :disabled="currentViewedStageIndex === 0"
+                    class="px-3.5 py-1.5 border border-neutral-200 hover:bg-neutral-50 text-neutral-600 rounded-lg text-xs font-semibold disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-all"
+                  >
+                    <span>◀ 上一層</span>
+                  </button>
+                  <div class="text-center">
+                    <span class="text-xs font-bold text-neutral-800 font-sans block">
+                      {{ stagesProgress[currentViewedStageIndex]?.name.split('：')[0] || `第 ${currentViewedStageIndex} 層` }}
+                    </span>
+                    <span class="text-[9px] text-purple-600 font-mono font-bold block">
+                      {{ currentViewedStageIndex }} / 12 層級
+                    </span>
+                  </div>
+                  <button 
+                    @click="currentViewedStageIndex = Math.min(12, currentViewedStageIndex + 1)"
+                    :disabled="currentViewedStageIndex === 12"
+                    class="px-3.5 py-1.5 border border-neutral-200 hover:bg-neutral-50 text-neutral-600 rounded-lg text-xs font-semibold disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-all"
+                  >
+                    <span>下一層 ▶</span>
+                  </button>
+                </div>
+
+                <div class="space-y-6 flex-1">
+                  <div 
+                    v-for="(stage, idx) in stagesProgress" 
+                    :key="stage.id"
+                    v-show="idx === currentViewedStageIndex"
+                    :id="`analysis-stage-card-${stage.id}`"
+                    class="border border-neutral-200/60 rounded-xl overflow-hidden shadow-sm bg-white"
+                  >
+                    <!-- Stage Title Header (Clickable to toggle accordion) -->
+                    <div 
+                      @click="showStagesAccordion[idx] = !showStagesAccordion[idx]"
+                      class="bg-neutral-50/80 px-4 py-3 border-b border-neutral-100 flex items-center justify-between text-xs font-semibold text-neutral-700 cursor-pointer select-none hover:bg-neutral-100/70 transition-colors"
+                    >
+                      <span class="flex items-center gap-1.5">
+                        <span class="w-4 h-4 rounded-full bg-neutral-200 text-neutral-700 flex items-center justify-center text-[9px]">{{ idx }}</span>
+                        <span>{{ stage.name }}</span>
+                      </span>
+                      <div class="flex items-center gap-3">
+                        <span :class="stage.status === 'success' ? 'text-emerald-600' : (stage.status === 'running' ? 'text-purple-600 animate-pulse' : 'text-neutral-400')">
+                          {{ stage.status === 'running' ? '正在生成...' : (stage.status === 'success' ? '已完成' : '等待上游階段...') }}
+                        </span>
+                        <ChevronUpIcon v-if="showStagesAccordion[idx]" class="w-3.5 h-3.5 text-neutral-400" />
+                        <ChevronDownIcon v-else class="w-3.5 h-3.5 text-neutral-400" />
+                      </div>
+                    </div>
+                    
+                    <div 
+                      class="p-4 text-sm leading-relaxed text-neutral-700 bg-white relative border-t border-neutral-50"
+                    >
+                      <!-- Stage Terminal Logs (Show what AI is doing behind the scenes) -->
+                      <div v-if="stageLogs[idx]" class="p-3.5 bg-neutral-900 text-neutral-200 rounded-xl font-mono text-[11px] mb-4 space-y-1.5 border border-neutral-800 shadow-inner select-text">
+                        <div class="text-[10px] uppercase tracking-wider font-bold text-purple-400 mb-2 border-b border-neutral-800 pb-1 flex items-center justify-between select-none">
+                          <span>⚙️ 本層技術分析預檢日誌</span>
+                          <span v-if="stageIsThinking[idx]" class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping"></span>
+                        </div>
+                        <div class="space-y-1.5" v-html="stageLogs[idx]"></div>
+                      </div>
+                      
+                      <!-- 1. Active Thinking Panel (Streaming text visible, with a cool frosted/foggy glass overlay) -->
+                      <div v-if="stageIsThinking[idx] && stageThoughts[idx]" class="relative border border-purple-100/70 rounded-xl bg-purple-50/5 p-4 mb-4 overflow-hidden">
+                        <!-- Frosted/Foggy background overlay -->
+                        <div class="absolute inset-0 bg-white/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none select-none">
+                          <div class="bg-white/95 border border-purple-200/50 px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5 animate-pulse">
+                            <SpinnerIcon class="w-3.5 h-3.5 text-purple-600 animate-spin" />
+                            <span class="text-[10px] font-bold text-purple-700">AI 思考中...</span>
+                          </div>
+                        </div>
+                        <!-- Legible streaming text -->
+                        <div class="text-[11px] font-mono text-neutral-500 italic whitespace-pre-wrap leading-relaxed select-text">
+                          {{ stageThoughts[idx] }}
+                        </div>
+                      </div>
+
+                      <!-- 2. Collapsed Thinking Trace (Finished thinking, show elegant collapse button) -->
+                      <div v-if="stageThoughts[idx] && !stageIsThinking[idx]" class="mb-4">
+                        <button 
+                          @click="showThoughtsCollapse[idx] = !showThoughtsCollapse[idx]"
+                          class="inline-flex items-center gap-1.5 px-3 py-1 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 text-neutral-600 hover:text-neutral-800 rounded-lg text-[10px] font-medium transition-colors select-none"
+                        >
+                          <span>🧠</span>
+                          <span>{{ showThoughtsCollapse[idx] ? '收起思考軌跡' : '展開思考軌跡' }}</span>
+                          <ChevronUpIcon v-if="showThoughtsCollapse[idx]" class="w-3 h-3 text-neutral-400" />
+                          <ChevronDownIcon v-else class="w-3 h-3 text-neutral-400" />
+                        </button>
+                        
+                        <div 
+                          v-if="showThoughtsCollapse[idx]"
+                          class="mt-2 p-3 bg-neutral-50 border border-neutral-200/70 rounded-lg text-[11px] font-mono text-neutral-500 italic whitespace-pre-wrap leading-relaxed select-text"
+                        >
+                          {{ stageThoughts[idx] }}
+                        </div>
+                      </div>
+
+                      <!-- Render text with KaTeX formulas and Code Blocks processed -->
+                      <div 
+                        v-if="stageOutputs[idx]"
+                        class="whitespace-pre-wrap select-text text-neutral-700 font-sans"
+                        v-html="parseAndRenderContent(stageOutputs[idx]).parsedText"
+                      ></div>
+                      
+                      <div v-else-if="stage.status === 'running' && !stageIsThinking[idx]" class="text-purple-400 font-medium animate-pulse flex items-center gap-2">
+                        <SpinnerIcon class="w-3.5 h-3.5 animate-spin" />
+                        <span>AI 正在撰寫本層技術分析，請稍候...</span>
+                      </div>
+                      <span v-else-if="stage.status === 'idle'" class="text-neutral-300 italic">等待上游階段完成後解鎖...</span>
+
+                      <!-- Stage 12 Copy Button (Prompt Clipboard Integration) -->
+                      <div v-if="idx === 12 && stageOutputs[idx] && !stageIsThinking[idx]" class="mt-4">
+                        <button 
+                          @click="copyToClipboard(stageOutputs[idx])"
+                          class="flex items-center gap-1.5 px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold shadow-md hover:shadow-lg transition-all"
+                        >
+                          <span>📋 複製 AI Agent 開發指令 Prompt</span>
+                        </button>
+                      </div>
+
+                      <!-- Render Rubric Score UI for this stage if parsed -->
+                      <div 
+                        v-if="stageOutputs[idx] && parsedStageScores[idx].score > 0" 
+                        class="mt-4 p-3 border border-purple-200 bg-purple-50/20 rounded-xl flex items-center justify-between"
+                      >
+                        <div class="flex-1 pr-4">
+                          <div class="text-[10px] font-bold text-purple-600 uppercase tracking-wide">本層指標可行性評分 (Rubric)</div>
+                          <div class="text-xs text-neutral-600 mt-1 font-medium">{{ parsedStageScores[idx].reason }}</div>
+                        </div>
+                        <div class="shrink-0 flex items-baseline gap-0.5 bg-purple-600 text-white px-3 py-1.5 rounded-lg shadow-sm font-sans">
+                          <span class="text-base font-black leading-none">{{ parsedStageScores[idx].score }}</span>
+                          <span class="text-[9px] opacity-75">/ 10 分</span>
+                        </div>
+                      </div>
+
+                      <!-- Render Feasibility Radar Chart if scores are detected -->
+                      <FeasibilityRadarChart 
+                        v-if="stageOutputs[idx] && parseAndRenderContent(stageOutputs[idx]).radarScores" 
+                        :scores="parseAndRenderContent(stageOutputs[idx]).radarScores" 
+                      />
+
+                      <!-- Render Dynamic Mermaid Diagram if Mermaid flowchart is detected in output -->
+                      <MermaidRender 
+                        v-if="stageOutputs[idx] && parseAndRenderContent(stageOutputs[idx]).mermaidCode" 
+                        :code="parseAndRenderContent(stageOutputs[idx]).mermaidCode" 
+                        :id="stage.id" 
+                      />
+
+                      <!-- Interactive Stage Refinement Chatbox (Visible only after all 12 stages are completed) -->
+                      <div 
+                        v-if="hasStartedMultiStage && !isMultiStageRunning && stagesProgress.every(s => s.status === 'success' || s.status === 'error') && stageOutputs[idx]" 
+                        class="mt-4 pt-3.5 border-t border-neutral-100 space-y-2 select-none"
+                      >
+                        <div class="flex items-center gap-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wide">
+                          <SparklesIcon class="w-3 h-3 text-purple-600 animate-pulse" />
+                          <span>微調本層分析（告訴 AI 如何修改）：</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <input 
+                            v-model="stageRefinePrompts[idx]"
+                            @keydown.enter.prevent="refineStageOutput(idx)"
+                            :disabled="stageIsRefining[idx]"
+                            type="text"
+                            placeholder="請輸入針對本層的修改指示（例如：「加入 Redis 快取規劃」、「更換為 MongoDB schema」等）..."
+                            class="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2 text-[11px] text-neutral-700 font-medium focus:outline-none focus:border-neutral-300 transition-colors disabled:opacity-50"
+                          />
+                          <button 
+                            @click="refineStageOutput(idx)"
+                            :disabled="stageIsRefining[idx] || !stageRefinePrompts[idx].trim()"
+                            class="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-[11px] font-semibold transition-colors disabled:opacity-40 flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                          >
+                            <SpinnerIcon v-if="stageIsRefining[idx]" class="w-3 h-3 animate-spin" />
+                            <SendIcon v-else class="w-3 h-3" />
+                            <span>{{ stageIsRefining[idx] ? '修改中...' : '送出' }}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Proposals Area -->
+              <div v-if="multiStageActions.length > 0 && !isMultiStageRunning" class="p-4 md:p-6 shrink-0 bg-white border-t border-neutral-100 shadow-inner">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-xs font-semibold text-neutral-800 flex items-center gap-1">
+                    <SparklesIcon class="w-3.5 h-3.5 text-purple-600" />
+                    <span>AI 建議新增之心智圖子節點：</span>
+                  </h3>
+                  <div class="flex items-center gap-2">
+                    <button @click="toggleAllMultiProposals(true)" class="text-[10px] text-purple-600 hover:underline font-semibold">全選</button>
+                    <span class="text-neutral-300 text-[10px]">|</span>
+                    <button @click="toggleAllMultiProposals(false)" class="text-[10px] text-neutral-500 hover:underline font-semibold">全不選</button>
+                  </div>
+                </div>
+                
+                <div class="max-h-24 md:max-h-32 overflow-y-auto space-y-2">
+                  <div 
+                    v-for="prop in multiStageActions" 
+                    :key="prop.id"
+                    class="flex items-center gap-2.5 p-2 bg-neutral-50 rounded-lg border border-neutral-100 text-xs"
+                  >
+                    <input v-model="prop.selected" type="checkbox" class="rounded text-purple-600 border-neutral-300 w-3.5 h-3.5 cursor-pointer" />
+                    <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">新增</span>
+                    <span class="text-neutral-700 font-medium">在「{{ prop.target }}」下新增子節點「{{ prop.text }}」</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-5 border-t border-neutral-100 flex items-center justify-between bg-neutral-50/50 shrink-0">
+            <div class="flex items-center gap-4 flex-1">
+              <span class="text-xs text-neutral-500">
+                <template v-if="!hasStartedMultiStage">
+                  配置偏好後即可啟動深度技術分析
+                </template>
+                <template v-else-if="isMultiStageRunning">
+                  <div class="flex flex-col gap-1 text-left">
+                    <div>正在為您進行：<strong class="text-purple-600 font-semibold">{{ stagesProgress[currentAnalyzingStageIndex]?.name || '分析中...' }}</strong> ({{ currentAnalyzingStageIndex }} / 12)</div>
+                    <div class="text-[10px] text-purple-600 font-mono flex items-center gap-1.5 animate-pulse">
+                      <SpinnerIcon class="w-3.5 h-3.5 animate-spin shrink-0 text-purple-500" />
+                      <span>{{ multiStageStatusMessage || '正在分析...' }}</span>
+                    </div>
+                  </div>
+                </template>
+                <template v-else-if="isMultiStagePaused">
+                  <div class="flex flex-col gap-1 text-left">
+                    <div class="font-semibold text-amber-600 flex items-center gap-1.5">
+                      <span>⏸️ 深度技術分析已暫停</span>
+                    </div>
+                    <div class="text-[10px] text-neutral-400 font-mono">目前暫停於：第 {{ currentAnalyzingStageIndex }} 層 (共 12 層)</div>
+                  </div>
+                </template>
+                <template v-else>
+                  十二層深度分析已順利完成！已選取套用 <strong class="text-purple-600 font-semibold">{{ selectedMultiProposalsCount }}</strong> / {{ multiStageActions.length }} 個結構調整
+                </template>
+              </span>
+              
+              <!-- Grand Total Feasibility Score display -->
+              <div v-if="hasStartedMultiStage && !isMultiStageRunning && !isMultiStagePaused" class="flex items-center gap-3 bg-neutral-100 px-3.5 py-1.5 rounded-xl border border-neutral-200/50">
+                <div class="text-xs font-bold text-neutral-700">綜合評估總分數：</div>
+                <div class="flex items-baseline gap-0.5">
+                  <span class="text-base font-black text-purple-700 leading-none">{{ grandTotalScore }}</span>
+                  <span class="text-[10px] text-neutral-400">/ 120 滿分</span>
+                </div>
+                <!-- Mini Progress Bar scaled to 120 -->
+                <div class="w-16 h-2 bg-neutral-200 rounded-full overflow-hidden">
+                  <div class="h-full bg-purple-600 transition-all duration-500" :style="{ width: (grandTotalScore / 1.2) + '%' }"></div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+              <button 
+                v-if="hasStartedMultiStage"
+                @click="generatePrintableReport"
+                class="px-4 py-2 border border-neutral-300 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>🖨️ 列印 / 匯出 PDF</span>
+              </button>
+              <button 
+                v-if="isMultiStageRunning"
+                @click="pauseMultiStageAnalysis"
+                class="px-4 py-2 border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>⏸️ 暫停分析</span>
+              </button>
+              <button 
+                v-if="isMultiStagePaused"
+                @click="triggerMultiStageAnalysisStart"
+                class="px-4 py-2 border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>▶️ 繼續分析</span>
+              </button>
+              <button 
+                @click="showMultiStageModal = false"
+                class="px-4 py-2 border border-neutral-200 hover:bg-neutral-100 text-neutral-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+              >
+                關閉
+              </button>
+              <button 
+                @click="applyMultiProposals"
+                :disabled="!hasStartedMultiStage || isMultiStageRunning || isMultiStagePaused || selectedMultiProposalsCount === 0"
+                class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5"
+              >
+                <CheckIcon class="w-3.5 h-3.5" />
+                <span>套用選取建議至心智圖</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
     
     <!-- Import Raw Code Modal -->
-    <ImportCodeModal 
-      :show="showImportCodeModal" 
-      @close="showImportCodeModal = false" 
-      @import="handleImportCode" 
-    />
+    <transition
+      enter-active-class="transition-all duration-300 ease-out"
+      leave-active-class="transition-all duration-200 ease-in"
+      enter-from-class="opacity-0 scale-95"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div 
+        v-if="showImportCodeModal"
+        class="fixed inset-0 bg-neutral-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 no-select"
+      >
+        <div class="bg-white rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col overflow-hidden border border-neutral-100">
+          <div class="p-5 border-b border-neutral-100 flex items-center justify-between shrink-0 bg-neutral-50/50">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-neutral-900 flex items-center justify-center text-white">
+                <TerminalIcon class="w-4 h-4" />
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold text-neutral-800">匯入 Mermaid / JSON 原始碼</h2>
+                <p class="text-[11px] text-neutral-400">貼上 Mermaid 流程圖或 JSON 原始碼，直接轉換為心智圖</p>
+              </div>
+            </div>
+            <button @click="showImportCodeModal = false" class="p-1 hover:bg-neutral-200/50 rounded-lg text-neutral-400 hover:text-neutral-700 transition-colors">
+              <CloseIcon class="w-4 h-4" />
+            </button>
+          </div>
+
+          <div class="p-6 space-y-4">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-semibold text-neutral-500 uppercase tracking-wider">選擇原始碼格式</label>
+              <select 
+                v-model="importFormat"
+                class="bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-1 text-xs text-neutral-700 font-medium focus:outline-none focus:border-neutral-300 transition-colors"
+              >
+                <option value="auto">自動偵測 (Auto)</option>
+                <option value="mermaid">Mermaid Flowchart</option>
+                <option value="json">JSON 結構代碼</option>
+              </select>
+            </div>
+
+            <textarea 
+              v-model="importCodeText"
+              rows="12"
+              placeholder="範例 (Mermaid):&#10;graph TD&#10;  A[專案設計] --> B(系統架構)&#10;  A --> C(資料庫)&#10;  B --> D[Vue 前端]&#10;&#10;或是直接貼上心智圖對應的 JSON 代碼..."
+              class="w-full p-4 bg-neutral-50 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-300 font-mono text-xs text-neutral-700 placeholder:text-neutral-300 resize-none select-text"
+            ></textarea>
+          </div>
+
+          <div class="p-5 border-t border-neutral-100 flex items-center justify-end gap-3 bg-neutral-50/50">
+            <button @click="showImportCodeModal = false" class="px-4 py-2 border border-neutral-200 hover:bg-neutral-100 text-neutral-700 rounded-xl text-xs font-semibold transition-colors">取消</button>
+            <button @click="handleImportCode" class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"><CheckIcon class="w-3.5 h-3.5" /><span>載入至畫布</span></button>
+          </div>
+        </div>
+      </div>
+    </transition>
 
     <!-- Node Properties & Details Modal -->
     <transition
