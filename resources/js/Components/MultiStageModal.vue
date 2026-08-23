@@ -110,22 +110,22 @@ const getLatestThinkingLine = (thoughts) => {
               <SparklesIcon class="w-4 h-4 animate-pulse" />
             </div>
             <div class="flex flex-col md:flex-row md:items-center md:gap-3">
-              <h2 class="text-sm font-semibold text-neutral-800">Laravel + Vue 混合架構十三層深度分析區</h2>
+              <h2 class="text-base font-semibold text-neutral-800">Laravel + Vue 混合架構十三層深度分析區</h2>
               <div class="flex items-center gap-2 mt-1 md:mt-0 flex-wrap">
-                <p class="text-[10px] md:text-[11px] text-neutral-400 m-0">分層級與客製化偏好，簡化評估、做法、細節與圖表</p>
+                <p class="text-xs md:text-sm text-neutral-400 m-0">分層級與客製化偏好，簡化評估、做法、細節與圖表</p>
                 <button 
                   @click="showProgressSidebar = !showProgressSidebar"
-                  class="px-2 py-0.5 border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded text-[10px] font-semibold transition-colors"
+                  class="px-2.5 py-1 border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg text-xs font-semibold transition-colors"
                 >
                   {{ showProgressSidebar ? '◀ 收起進度' : '▶ 展開進度' }}
                 </button>
                 
                 <!-- Header History Versions Selector -->
-                <div v-if="historyVersions.length > 0" class="flex items-center gap-1 bg-purple-50/70 border border-purple-200 rounded px-1.5 py-0.5 ml-1">
-                  <span class="text-[9px] font-bold text-purple-800 select-none">📜 歷史版本:</span>
+                <div v-if="historyVersions.length > 0" class="flex items-center gap-1.5 bg-purple-50/70 border border-purple-200 rounded-lg px-2.5 py-1 ml-1">
+                  <span class="text-xs font-bold text-purple-800 select-none">📜 歷史版本:</span>
                   <select 
                     @change="e => { if (e.target.value !== '') { emit('loadVersion', historyVersions[e.target.value]); e.target.value = ''; } }"
-                    class="bg-transparent border-none text-[9px] text-purple-800 font-semibold focus:outline-none cursor-pointer p-0 pr-4"
+                    class="bg-transparent border-none text-xs text-purple-800 font-semibold focus:outline-none cursor-pointer p-0 pr-4"
                   >
                     <option value="">選擇切換歷史版本...</option>
                     <option v-for="(v, index) in historyVersions" :key="index" :value="index">
