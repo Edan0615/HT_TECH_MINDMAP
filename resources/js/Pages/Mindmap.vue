@@ -474,8 +474,42 @@ onMounted(() => {
       if (props.mindmap.ai_history.stageOutputs) {
         stageOutputs.value = props.mindmap.ai_history.stageOutputs
       }
+      if (props.mindmap.ai_history.stageLogs) {
+        stageLogs.value = props.mindmap.ai_history.stageLogs
+      }
       if (props.mindmap.ai_history.stagesProgress) {
-        stagesProgress.value = props.mindmap.ai_history.stagesProgress
+        let loaded = props.mindmap.ai_history.stagesProgress
+        if (loaded.length === 12 && loaded[0] && loaded[0].name.includes('第一層')) {
+          loaded.unshift({ id: 0, name: '第 0 層：解讀現有代碼結構與分析意圖', status: 'success' })
+          loaded.forEach((s, idx) => s.id = idx)
+          if (stageOutputs.value.length === 12) {
+            stageOutputs.value.unshift('已於系統升級前跳過該專案掃描檢索。')
+          }
+          if (stageLogs.value.length === 12) {
+            stageLogs.value.unshift('已於系統升級前跳過該專案預檢日誌。')
+          }
+        }
+        const names = [
+          '第 0 層：解讀現有代碼結構與分析意圖',
+          '第一層：看圖說故事 (系統架構意圖與概覽)',
+          '第二層：商業分析與業務價值規劃',
+          '第三層：開發技術棧與語言適配分析 (Laravel, Vue, Tailwind, Python)',
+          '第四層：定位與架構規劃評估 (子功能架構 vs. 整體網站方案對比)',
+          '第五層：技術難點與潛在風險評估',
+          '第六層：技術可行性雷達圖 analysis (Chart.js)',
+          '第七層：技術實作做法設計 (Blade + Vue 掛載與載入機制)',
+          '第八層：模組與核心程式結構 (Model, Migration, Controller, Service & Web.php)',
+          '第九層：資料庫 ER 關聯圖設計 (Mermaid ERD)',
+          '第十層：與其他節點關係與資料流互動分析',
+          '第十一層：自動生成結構設計 Mermaid 流程圖 & 新增建議',
+          '第十二層：產出供 AI Agent 執行的完整開發指令 Prompt (可複製)'
+        ]
+        loaded.forEach((s, idx) => {
+          if (names[idx]) {
+            s.name = names[idx]
+          }
+        })
+        stagesProgress.value = loaded
       }
     }
   } else {
@@ -1229,6 +1263,165 @@ const pauseMultiStageAnalysis = () => {
     stagesProgress.value[currentAnalyzingStageIndex.value].status = 'idle'
     stageIsThinking.value[currentAnalyzingStageIndex.value] = false
   }
+  saveAiHistoryProgress()
+}
+
+const generatePrintableReport = () => {
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    alert('無法開啟列印視窗，請檢查您的瀏覽器是否阻擋了彈出視窗。')
+    return
+  }
+
+  const mindmapTitle = mindmap.value?.text || '系統架構設計藍圖'
+  const activeNodeText = selectedNode.value?.text || '選定模組'
+  
+  let reportsHtml = ''
+  stagesProgress.value.forEach((stage, idx) => {
+    const outputText = stageOutputs.value[idx] || ''
+    if (outputText) {
+      const rendered = parseAndRenderContent(outputText).parsedText
+      reportsHtml += `
+        <div class="report-card ${idx > 0 ? 'page-break' : ''}">
+          <h2 class="section-title">
+            <span class="badge bg-purple-600 me-2 text-white px-2 py-1 rounded" style="background-color: #6f42c1 !important;">${idx}</span>
+            ${stage.name}
+          </h2>
+          <div class="report-content">
+            ${rendered}
+          </div>
+        </div>
+      `
+    }
+  })
+
+  const docContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>【列印報告】${mindmapTitle} - ${activeNodeText} 技術架構分析</title>
+      <!-- Load Bootstrap for rich layouts -->
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+      <!-- Load KaTeX CSS for equations -->
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+      <style>
+        body {
+          font-family: 'Inter', 'Noto Sans TC', sans-serif;
+          background-color: #f8f9fa;
+          color: #2d3748;
+          padding: 40px 20px;
+          line-height: 1.6;
+        }
+        .container {
+          max-width: 900px;
+        }
+        .header-box {
+          border-bottom: 2px solid #6f42c1;
+          padding-bottom: 20px;
+          margin-bottom: 40px;
+        }
+        .report-card {
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 30px;
+          margin-bottom: 30px;
+          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .section-title {
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: #4a5568;
+          border-bottom: 1px solid #edf2f7;
+          padding-bottom: 12px;
+          margin-bottom: 20px;
+          display: flex;
+          align-items: center;
+        }
+        .report-content {
+          font-size: 14px;
+        }
+        .report-content pre {
+          background: #1a202c !important;
+          color: #48bb78 !important;
+          padding: 15px !important;
+          border-radius: 8px !important;
+          font-family: Menlo, Monaco, Consolas, "Courier New", monospace !important;
+          font-size: 12px !important;
+          margin: 15px 0 !important;
+        }
+        .no-print-bar {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          padding: 15px 24px;
+          border-radius: 12px;
+          margin-bottom: 30px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .btn-purple {
+          background-color: #6f42c1 !important;
+          border-color: #6f42c1 !important;
+        }
+        .btn-purple:hover {
+          background-color: #5a32a3 !important;
+          border-color: #5a32a3 !important;
+        }
+        @media print {
+          body {
+            background-color: #fff;
+            padding: 0;
+          }
+          .no-print-bar, .no-print {
+            display: none !important;
+          }
+          .report-card {
+            border: none;
+            box-shadow: none;
+            padding: 0;
+            margin-bottom: 40px;
+          }
+          .page-break {
+            page-break-before: always;
+            break-before: page;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <!-- Floating no-print control bar -->
+        <div class="no-print-bar">
+          <div>
+            <h5 class="m-0 font-weight-bold text-dark">🖨️ 系統架構報告列印預覽</h5>
+            <small class="text-muted">建議選擇「另存為 PDF」或直接列印</small>
+          </div>
+          <button onclick="window.print()" class="btn btn-purple text-white px-4 py-2 font-weight-bold">
+            ⚡ 立即啟動列印 / 匯出 PDF
+          </button>
+        </div>
+
+        <div class="header-box">
+          <h1 class="h3 font-weight-bold text-dark">${mindmapTitle}</h1>
+          <div class="text-muted text-xs mt-2 d-flex gap-4">
+            <span><strong>🎯 目標節點：</strong> ${activeNodeText}</span>
+            <span><strong>📅 產生時間：</strong> ${new Date().toLocaleString()}</span>
+          </div>
+        </div>
+
+        <div class="reports-container">
+          ${reportsHtml || '<div class="alert alert-warning text-center">目前尚無已完成的架構分析報告。</div>'}
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+  printWindow.document.write(docContent)
+  printWindow.document.close()
 }
 
 const applyProposals = () => {
@@ -1393,6 +1586,24 @@ const triggerMultiStageSetup = () => {
   stageThoughts.value = ['', '', '', '', '', '', '', '', '', '', '', '', '']
   showThoughtsCollapse.value = [false, false, false, false, false, false, false, false, false, false, false, false, false]
   showStagesAccordion.value = [true, true, true, true, true, true, true, true, true, true, true, true, true]
+}
+
+const saveAiHistoryProgress = async () => {
+  try {
+    await window.axios.post('/mindmaps', {
+      id: props.mindmap.id,
+      title: mindmap.value?.text || '未命名心智圖',
+      folder: props.mindmap.folder || '網站',
+      data: mindmap.value,
+      ai_history: {
+        stageOutputs: stageOutputs.value,
+        stagesProgress: stagesProgress.value,
+        stageLogs: stageLogs.value
+      }
+    })
+  } catch (e) {
+    console.error('自動備份 AI 歷史進度失敗：', e)
+  }
 }
 
 // 13-Stage Sequential progressive AI reasoning pipeline
@@ -1924,6 +2135,7 @@ ${customStylePrompt}
 
         stagesProgress.value[i].status = 'success'
         stageIsThinking.value[i] = false
+        await saveAiHistoryProgress()
       } catch (innerError) {
         if (innerError.name === 'AbortError') {
           console.log('AI analysis request aborted successfully.')
@@ -2680,7 +2892,7 @@ const selectedMultiProposalsCount = computed(() => {
                     </div>
                     
                     <div 
-                      class="p-4 text-xs leading-relaxed text-neutral-700 bg-white relative border-t border-neutral-50"
+                      class="p-4 text-sm leading-relaxed text-neutral-700 bg-white relative border-t border-neutral-50"
                     >
                       <!-- Stage Terminal Logs (Show what AI is doing behind the scenes) -->
                       <div v-if="stageLogs[idx]" class="p-3.5 bg-neutral-900 text-neutral-200 rounded-xl font-mono text-[11px] mb-4 space-y-1.5 border border-neutral-800 shadow-inner select-text">
@@ -2883,6 +3095,13 @@ const selectedMultiProposalsCount = computed(() => {
             </div>
             
             <div class="flex items-center gap-3">
+              <button 
+                v-if="hasStartedMultiStage"
+                @click="generatePrintableReport"
+                class="px-4 py-2 border border-neutral-300 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>🖨️ 列印 / 匯出 PDF</span>
+              </button>
               <button 
                 v-if="isMultiStageRunning"
                 @click="pauseMultiStageAnalysis"
