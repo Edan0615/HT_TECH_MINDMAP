@@ -12,6 +12,9 @@
     @mouseup="onMouseUp"
     @mouseleave="onMouseUp"
     @wheel="onWheel"
+    @touchstart.passive="onTouchStart"
+    @touchmove.passive="onTouchMove"
+    @touchend="onTouchEnd"
   >
     <!-- Grid pattern background for a premium UI feel -->
     <div class="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none opacity-60"></div>
@@ -137,6 +140,8 @@ const panX = ref(100)
 const panY = ref(150)
 const isDragging = ref(false)
 const dragStart = ref({ x: 0, y: 0 })
+const touchStartDist = ref(0)
+const touchStartZoom = ref(1)
 
 const connections = ref([])
 
@@ -174,11 +179,57 @@ const onMouseUp = () => {
 
 const onWheel = (e) => {
   e.preventDefault()
-  const zoomFactor = 0.1
-  const nextZoom = e.deltaY < 0 ? zoom.value + zoomFactor : zoom.value - zoomFactor
-  
-  zoom.value = Math.min(Math.max(nextZoom, 0.4), 2.5)
+  if (e.ctrlKey) {
+    // Zooming using trackpad pinch or Ctrl + Mouse Wheel
+    const zoomFactor = 0.05
+    const nextZoom = e.deltaY < 0 ? zoom.value + zoomFactor : zoom.value - zoomFactor
+    zoom.value = Math.min(Math.max(nextZoom, 0.4), 2.5)
+  } else {
+    // Panning using trackpad scroll drag (Figma style!)
+    panX.value -= e.deltaX
+    panY.value -= e.deltaY
+  }
   nextTick(updateConnections)
+}
+
+// Touch controls for phones & tablets (touch screens)
+const onTouchStart = (e) => {
+  if (e.target.closest('button')) return
+  if (e.touches.length === 1) {
+    isDragging.value = true
+    const touch = e.touches[0]
+    dragStart.value = { x: touch.clientX - panX.value, y: touch.clientY - panY.value }
+  } else if (e.touches.length === 2) {
+    isDragging.value = false
+    const t1 = e.touches[0]
+    const t2 = e.touches[1]
+    const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY)
+    touchStartDist.value = dist
+    touchStartZoom.value = zoom.value
+  }
+}
+
+const onTouchMove = (e) => {
+  if (e.touches.length === 1 && isDragging.value) {
+    const touch = e.touches[0]
+    panX.value = touch.clientX - dragStart.value.x
+    panY.value = touch.clientY - dragStart.value.y
+    updateConnections()
+  } else if (e.touches.length === 2) {
+    const t1 = e.touches[0]
+    const t2 = e.touches[1]
+    const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY)
+    if (touchStartDist.value > 0) {
+      const factor = dist / touchStartDist.value
+      zoom.value = Math.min(Math.max(touchStartZoom.value * factor, 0.4), 2.5)
+      nextTick(updateConnections)
+    }
+  }
+}
+
+const onTouchEnd = () => {
+  isDragging.value = false
+  touchStartDist.value = 0
 }
 
 const zoomIn = () => {

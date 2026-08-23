@@ -69,6 +69,47 @@ const formatDate = (dateStr) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+const addCustomProperty = () => {
+  if (!selectedNode.value) return
+  if (!selectedNode.value.properties) {
+    selectedNode.value.properties = {}
+  }
+  let newKey = '新欄位'
+  let counter = 1
+  while (selectedNode.value.properties.hasOwnProperty(newKey)) {
+    newKey = `新欄位_${counter++}`
+  }
+  selectedNode.value.properties[newKey] = ''
+  updateNodeProperties(selectedNode.value.id, { ...selectedNode.value.properties })
+}
+
+const updatePropertyValue = (key, value) => {
+  if (!selectedNode.value || !selectedNode.value.properties) return
+  selectedNode.value.properties[key] = value
+  updateNodeProperties(selectedNode.value.id, { ...selectedNode.value.properties })
+}
+
+const renamePropertyKey = (oldKey, newKey) => {
+  if (!selectedNode.value || !selectedNode.value.properties) return
+  if (!newKey || oldKey === newKey) return
+  
+  if (selectedNode.value.properties.hasOwnProperty(newKey)) {
+    alert('此欄位名稱已存在！')
+    return
+  }
+  
+  const val = selectedNode.value.properties[oldKey]
+  delete selectedNode.value.properties[oldKey]
+  selectedNode.value.properties[newKey] = val
+  updateNodeProperties(selectedNode.value.id, { ...selectedNode.value.properties })
+}
+
+const deleteProperty = (key) => {
+  if (!selectedNode.value || !selectedNode.value.properties) return
+  delete selectedNode.value.properties[key]
+  updateNodeProperties(selectedNode.value.id, { ...selectedNode.value.properties })
+}
+
 const saveToDatabase = async () => {
   isSaving.value = true
   try {
@@ -257,6 +298,7 @@ const {
   changeSelectedNodesColor,
   updateNodeText,
   updateNodeDetails,
+  updateNodeProperties,
   toggleNodeExpand,
   nestNode,
   unnestNode,
@@ -281,6 +323,7 @@ watch(() => mindmap.value, (newVal) => {
 // UI state
 const showOutline = ref(true)
 const showAiPanel = ref(true)
+const attachedCodeContext = ref('')
 const showDetailsPanel = ref(false)
 const selectedTemplate = ref('software_design')
 const fileInputRef = ref(null)
@@ -1344,96 +1387,14 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
   isMultiStageRunning.value = true
   isMultiStagePaused.value = false
   
+  if (startFromIdx === 0) {
+    attachedCodeContext.value = ''
+  }
+  
   const apiEndpointVal = apiEndpoint.value
   const apiModelVal = apiModel.value
   const nodeText = selectedNode.value.text
   const fullMindmapJson = JSON.stringify(mindmap.value, null, 2)
-
-  let attachedCodeContext = ''
-  
-  // Dynamic agentic file context selector for 12-stage analysis
-  if (allowAiReadCode.value) {
-    const targetProj = selectedProject.value || 'beartor'
-    multiStageStatusMessage.value = '🔍 正在掃描並讀取專案目錄結構樹...'
-    try {
-      const treeRes = await window.axios.post('/api/projects/tree', { 
-        project: targetProj,
-        username: selectedProjectUser.value
-      })
-      if (treeRes.data.success && treeRes.data.files.length > 0) {
-        const filesList = treeRes.data.files.map(f => f.relative_path)
-        
-        multiStageStatusMessage.value = '🧠 AI 正在分析目錄，決定精讀哪些原始碼檔案...'
-        // Ask AI which files it needs based on the core mindmap node topic
-        const preFlightRes = await fetch(`${apiEndpointVal}/v1/chat/completions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: apiModelVal,
-            messages: [
-              { 
-                role: 'system', 
-                content: '你是一個專案目錄結構預檢大師。請閱讀提供的檔案列表，依據使用者的任務指示，回傳一個包含最多 3 個必須精讀的檔案相對路徑之 JSON 陣列。請只回傳陣列 JSON本身，例如：["app/Http/Controllers/HomeController.php"]，絕不要包含 any other explanation or Markdown markup.' 
-              },
-              { 
-                role: 'user', 
-                content: `專案檔案列表：\n${JSON.stringify(filesList.slice(0, 300))}\n\n任務指示：請針對目前選取的心智圖架構節點「${nodeText}」進行 12 層深度系統分析規劃。\n請回傳 JSON 陣列：` 
-              }
-            ],
-            temperature: 0.1
-          })
-        })
-        
-        if (preFlightRes.ok) {
-          const preFlightData = await preFlightRes.json()
-          const aiDecision = preFlightData.choices[0]?.message?.content || ''
-          
-          let targetPaths = []
-          try {
-            const arrMatch = aiDecision.match(/\[\s*([\s\S]*?)\s*\]/)
-            if (arrMatch) {
-              targetPaths = JSON.parse(arrMatch[0])
-            } else {
-              targetPaths = JSON.parse(aiDecision.trim())
-            }
-          } catch (e) {
-            filesList.forEach(path => {
-              if (aiDecision.includes(path) && targetPaths.length < 3) {
-                targetPaths.push(path)
-              }
-            })
-          }
-          
-          if (targetPaths && targetPaths.length > 0) {
-            targetPaths = targetPaths.slice(0, 3)
-            attachedCodeContext += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. You can only read. Analyze this project files context to execute your 12-stage report:\n\n`
-            
-            for (const path of targetPaths) {
-              try {
-                multiStageStatusMessage.value = `📖 正在讀取並精讀專案檔案：${path}...`
-                const fileRes = await window.axios.post('/api/projects/read', {
-                  project: targetProj,
-                  file_path: path,
-                  username: selectedProjectUser.value
-                })
-                if (fileRes.data.success) {
-                  attachedCodeContext += `==== 檔案: ${path} ====\n\`\`\`\n${fileRes.data.content}\n\`\`\`\n\n`
-                }
-              } catch (err) {
-                console.error(`12階段讀取檔案 ${path} 失敗:`, err)
-              }
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.error('12階段檔案結構預檢失敗:', err)
-    }
-  } else if (selectedFile.value && selectedFileContent.value) {
-    multiStageStatusMessage.value = `📖 正在將已選擇的檔案「${selectedFile.value.name}」載入 AI 上下文...`
-    attachedCodeContext += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. Analyze this project file context to execute your 12-stage report:\n`
-    attachedCodeContext += `==== 檔案: ${selectedFile.value.relative_path} ====\n\`\`\`\n${selectedFileContent.value}\n\`\`\`\n\n`
-  }
 
   const selectedMbtiObj = mbtiOptions.find(o => o.value === mbtiStyle.value)
   const mbtiStyleInstructions = `請採用「${selectedMbtiObj ? selectedMbtiObj.label : mbtiStyle.value}」性格的表達口吻進行全繁體中文輸出。`
@@ -1551,13 +1512,174 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
       stagesProgress.value[i].status = 'running'
       stageIsThinking.value[i] = true
       multiStageStatusMessage.value = `🧠 AI 正在分析：${stagesProgress.value[i].name}...`
+
+      if (i === 0 && startFromIdx === 0) {
+        const logToStage0 = (html) => {
+          stageOutputs.value[0] = `
+            <div class="p-3.5 bg-neutral-900 text-neutral-200 rounded-xl font-mono text-[11px] mb-4 space-y-1.5 border border-neutral-800 shadow-inner">
+              <div class="text-[10px] uppercase tracking-wider font-bold text-purple-400 mb-2 border-b border-neutral-800 pb-1 flex items-center justify-between">
+                <span>📂 原始碼沙盒檢索日誌</span>
+                <span class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping"></span>
+              </div>
+              ${html}
+            </div>
+          `
+        }
+
+        let logHtml = `
+          <div class="flex items-center gap-2 text-purple-400">
+            <span class="animate-spin text-xs">⏳</span>
+            <span>[SCAN] 正在讀取並掃描專案目錄結構樹...</span>
+          </div>
+        `
+        logToStage0(logHtml)
+        
+        try {
+          if (allowAiReadCode.value) {
+            const targetProj = selectedProject.value || 'beartor'
+            const treeRes = await window.axios.post('/api/projects/tree', { 
+              project: targetProj,
+              username: selectedProjectUser.value
+            })
+            
+            if (treeRes.data.success && treeRes.data.files.length > 0) {
+              const filesList = treeRes.data.files.map(f => f.relative_path)
+              logHtml += `
+                <div class="text-emerald-400">
+                  ✓ [SCAN SUCCESS] 已成功掃描專案目錄，共找到 ${filesList.length} 個檔案
+                </div>
+                <div class="flex items-center gap-2 text-purple-400">
+                  <span class="animate-spin text-xs">⏳</span>
+                  <span>[PRE-FLIGHT] AI 正在評估專案目錄，篩選核心代碼檔案...</span>
+                </div>
+              `
+              logToStage0(logHtml)
+              
+              const preFlightRes = await fetch(`${apiEndpointVal}/v1/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: apiModelVal,
+                  messages: [
+                    { 
+                      role: 'system', 
+                      content: '你是一個專案目錄結構預檢大師。請閱讀提供的檔案列表，依據使用者的任務指示，回傳一個包含最多 3 個必須精讀的檔案相對路徑之 JSON 陣列。請只回傳陣列 JSON本身，例如：["app/Http/Controllers/HomeController.php"]，絕不要包含 any other explanation or Markdown markup.' 
+                    },
+                    { 
+                      role: 'user', 
+                      content: `專案檔案列表：\n${JSON.stringify(filesList.slice(0, 300))}\n\n任務指示：請針對目前選取的心智圖架構節點「${nodeText}」進行 12 層深度系統分析規劃。\n請回傳 JSON 陣列：` 
+                    }
+                  ],
+                  temperature: 0.1
+                })
+              })
+              
+              if (preFlightRes.ok) {
+                const preFlightData = await preFlightRes.json()
+                const aiDecision = preFlightData.choices[0]?.message?.content || ''
+                
+                let targetPaths = []
+                try {
+                  const arrMatch = aiDecision.match(/\[\s*([\s\S]*?)\s*\]/)
+                  if (arrMatch) {
+                    targetPaths = JSON.parse(arrMatch[0])
+                  } else {
+                    targetPaths = JSON.parse(aiDecision.trim())
+                  }
+                } catch (e) {
+                  filesList.forEach(path => {
+                    if (aiDecision.includes(path) && targetPaths.length < 3) {
+                      targetPaths.push(path)
+                    }
+                  })
+                }
+                
+                if (targetPaths && targetPaths.length > 0) {
+                  targetPaths = targetPaths.slice(0, 3)
+                  logHtml += `
+                    <div class="text-amber-400 font-bold">
+                      ✓ [AI SELECTED] AI 智慧選定精讀以下 3 個核心檔案：
+                    </div>
+                    <div class="pl-4 text-neutral-300">
+                      ${targetPaths.map(p => `• ${p}`).join('<br/>')}
+                    </div>
+                  `
+                  logToStage0(logHtml)
+                  
+                  let filesContext = '[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. Analyze this project files context:\n\n'
+                  
+                  for (const path of targetPaths) {
+                    logHtml += `
+                      <div class="flex items-center gap-2 text-purple-400 animate-pulse">
+                        <span>⏳</span>
+                        <span>[READING] 正在精讀代碼檔案: ${path}...</span>
+                      </div>
+                    `
+                    logToStage0(logHtml)
+                    
+                    const fileRes = await window.axios.post('/api/projects/read', {
+                      project: targetProj,
+                      file_path: path,
+                      username: selectedProjectUser.value
+                    })
+                    
+                    if (fileRes.data.success) {
+                      filesContext += `==== 檔案: ${path} ====\n\`\`\`\n${fileRes.data.content}\n\`\`\`\n\n`
+                      logHtml += `
+                        <div class="text-neutral-400 text-[10px] pl-4">
+                          - 已成功載入 ${path} (${fileRes.data.content.length} 字元)
+                        </div>
+                      `
+                      logToStage0(logHtml)
+                    }
+                  }
+                  attachedCodeContext.value = filesContext
+                }
+              }
+            } else {
+              logHtml += `<div class="text-red-400">[ERROR] 找不到檔案或讀取目錄權限被拒絕。將採用空專案模式繼續。</div>`
+              logToStage0(logHtml)
+            }
+          } else if (selectedFile.value && selectedFileContent.value) {
+            logHtml += `
+              <div class="text-emerald-400">
+                ✓ [LOAD SELECTED] 正在載入手動選取檔案：${selectedFile.value.name}
+              </div>
+            `
+            logToStage0(logHtml)
+            let filesContext = `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. Analyze this project file context:\n`
+            filesContext += `==== 檔案: ${selectedFile.value.relative_path} ====\n\`\`\`\n${selectedFileContent.value}\n\`\`\`\n\n`
+            attachedCodeContext.value = filesContext
+            logHtml += `
+              <div class="text-neutral-400 text-[10px] pl-4">
+                - 已成功載入 ${selectedFile.value.name} (${selectedFileContent.value.length} 字元)
+              </div>
+            `
+            logToStage0(logHtml)
+          } else {
+            logHtml += `
+              <div class="text-neutral-400">
+                ℹ [NO CONTEXT] 未開啟代碼閱讀權限且無手動載入檔案，僅基於心智圖內容進行分析。
+              </div>
+            `
+            logToStage0(logHtml)
+          }
+        } catch (err) {
+          console.error(err)
+          logHtml += `<div class="text-red-400">[EXCEPTION] 檔案預檢中斷: ${err.message}</div>`
+          logToStage0(logHtml)
+        }
+        
+        logHtml += `<div class="text-purple-400 font-bold mt-2 animate-pulse">[STREAM] AI 正在產出第 0 層分析報告中...</div>`
+        logToStage0(logHtml)
+      }
       
       const accumulatedContext = stageOutputs.value
         .map((out, idx) => out ? `### ${stagesProgress.value[idx].name}\n${out}` : '')
         .filter(Boolean)
         .join('\n\n')
 
-      const currentPrompt = `${attachedCodeContext}
+      const currentPrompt = `${attachedCodeContext.value}
 當前整個心智圖設計文件的完整 JSON 結構如下：
 \`\`\`json
 ${fullMindmapJson}
@@ -2008,14 +2130,69 @@ const selectedMultiProposalsCount = computed(() => {
               </div>
             </div>
 
-            <!-- Drawer Textarea -->
-            <div class="flex-1 p-4">
-              <textarea 
-                v-model="selectedNode.details"
-                @input="e => updateNodeDetails(selectedNode.id, e.target.value)"
-                placeholder="貼入或在這裡撰寫該節點的詳細功能描述、規格說明、執行計劃、或 Mermaid 流程代碼..."
-                class="w-full h-full p-3 bg-neutral-50 border border-neutral-100 rounded-xl focus:outline-none focus:border-neutral-200 font-mono text-xs text-neutral-700 placeholder:text-neutral-300 resize-none select-text"
-              ></textarea>
+            <!-- Drawer Content Panel -->
+            <div class="flex-1 flex min-h-0 divide-x divide-neutral-100 p-4 gap-4">
+              <!-- Left side: Detailed Description and Plan -->
+              <div class="flex-1 flex flex-col space-y-2 min-w-0">
+                <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">📝 功能明細與開發計畫</label>
+                <textarea 
+                  v-model="selectedNode.details"
+                  @input="e => updateNodeDetails(selectedNode.id, e.target.value)"
+                  placeholder="貼入或在這裡撰寫該節點的詳細功能描述、規格說明、執行計劃、或 Mermaid 流程代碼..."
+                  class="w-full flex-1 p-3 bg-neutral-50 border border-neutral-100 rounded-xl focus:outline-none focus:border-neutral-200 font-mono text-xs text-neutral-700 placeholder:text-neutral-300 resize-none select-text animate-fade-in"
+                ></textarea>
+              </div>
+
+              <!-- Right side: JSON Custom Attributes -->
+              <div class="w-80 pl-4 flex flex-col space-y-2 shrink-0 select-none">
+                <div class="flex items-center justify-between">
+                  <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">📊 節點自訂屬性 (JSON Properties)</label>
+                  <button 
+                    @click="addCustomProperty" 
+                    class="px-2 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 rounded-lg text-[9px] font-bold transition-all cursor-pointer"
+                  >
+                    ➕ 新增欄位
+                  </button>
+                </div>
+                
+                <!-- Properties List -->
+                <div class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
+                  <div v-if="!selectedNode.properties || Object.keys(selectedNode.properties).length === 0" class="h-full flex items-center justify-center text-[10px] text-neutral-400 italic">
+                    尚未設定自訂欄位。點擊上方新增。
+                  </div>
+                  <div 
+                    v-else
+                    v-for="(val, key) in selectedNode.properties" 
+                    :key="key"
+                    class="flex items-center gap-1.5 bg-neutral-50 p-2 rounded-lg border border-neutral-100"
+                  >
+                    <!-- Key Input -->
+                    <input 
+                      type="text" 
+                      :value="key" 
+                      @blur="e => renamePropertyKey(key, e.target.value.trim())"
+                      placeholder="欄位名"
+                      class="w-20 bg-white border border-neutral-200 rounded px-1.5 py-0.5 text-[10px] font-bold text-neutral-700 focus:border-purple-300 outline-none"
+                    />
+                    <span class="text-neutral-400 font-bold">:</span>
+                    <!-- Value Input -->
+                    <input 
+                      type="text" 
+                      :value="val" 
+                      @input="e => updatePropertyValue(key, e.target.value)"
+                      placeholder="值內容"
+                      class="flex-1 bg-white border border-neutral-200 rounded px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 focus:border-purple-300 outline-none select-text"
+                    />
+                    <!-- Delete Button -->
+                    <button 
+                      @click="deleteProperty(key)"
+                      class="p-1 hover:bg-red-50 text-neutral-400 hover:text-red-500 rounded transition-all cursor-pointer"
+                    >
+                      <TrashIcon class="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </transition>

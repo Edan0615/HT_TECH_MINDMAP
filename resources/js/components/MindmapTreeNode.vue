@@ -3,7 +3,7 @@
     <!-- Node Box -->
     <div 
       :id="'node-' + node.id"
-      class="node-box flex items-center gap-2 px-3 py-1.5 bg-white border rounded-lg shadow-sm hover:shadow-md transition-all z-10 select-none group min-w-[100px] max-w-[320px]"
+      class="node-box flex items-center gap-2 px-3 py-1.5 bg-white border rounded-lg shadow-sm hover:shadow-md transition-all z-10 select-none group min-w-[100px] max-w-[320px] shrink-0"
       :class="[
         isSelected 
           ? 'border-neutral-950 ring-1 ring-neutral-950 bg-neutral-50/50' 

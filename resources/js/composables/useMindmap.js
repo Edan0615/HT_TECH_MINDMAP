@@ -409,6 +409,15 @@ export function useMindmap() {
     }
   }
 
+  const updateNodeProperties = (nodeId, properties) => {
+    const node = findNode(nodeId)
+    if (node) {
+      node.properties = properties
+      saveToSession()
+      recordHistory()
+    }
+  }
+
   const toggleNodeExpand = (nodeId) => {
     const node = findNode(nodeId)
     if (node) {
@@ -519,6 +528,7 @@ export function useMindmap() {
     deleteNode,
     updateNodeText,
     updateNodeDetails,
+    updateNodeProperties,
     toggleNodeExpand,
     nestNode,
     unnestNode,
