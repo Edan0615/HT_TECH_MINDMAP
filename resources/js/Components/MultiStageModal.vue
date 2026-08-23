@@ -13,6 +13,7 @@ import {
 } from '@lucide/vue'
 import FeasibilityRadarChart from './FeasibilityRadarChart.vue'
 import MermaidRender from './MermaidRender.vue'
+import HistoryVersionsModal from './HistoryVersionsModal.vue'
 
 const props = defineProps({
   show: { type: Boolean, required: true },
@@ -62,11 +63,13 @@ const emit = defineEmits([
   'print',
   'loadVersion',
   'deleteVersion',
-  'saveVersion'
+  'saveVersion',
+  'renameVersion'
 ])
 
 // Local UI States
 const showProgressSidebar = ref(true)
+const showHistoryModal = ref(false)
 const showStagesAccordion = ref([true, true, true, true, true, true, true, true, true, true, true, true, true])
 const showThoughtsCollapse = ref([false, false, false, false, false, false, false, false, false, false, false, false, false])
 const refinementInput = ref('')
@@ -120,19 +123,14 @@ const getLatestThinkingLine = (thoughts) => {
                   {{ showProgressSidebar ? '◀ 收起進度' : '▶ 展開進度' }}
                 </button>
                 
-                <!-- Header History Versions Selector -->
-                <div v-if="historyVersions.length > 0" class="flex items-center gap-1.5 bg-purple-50/70 border border-purple-200 rounded-lg px-2.5 py-1 ml-1">
-                  <span class="text-xs font-bold text-purple-800 select-none">📜 歷史版本:</span>
-                  <select 
-                    @change="e => { if (e.target.value !== '') { emit('loadVersion', historyVersions[e.target.value]); e.target.value = ''; } }"
-                    class="bg-transparent border-none text-xs text-purple-800 font-semibold focus:outline-none cursor-pointer p-0 pr-4"
-                  >
-                    <option value="">選擇切換歷史版本...</option>
-                    <option v-for="(v, index) in historyVersions" :key="index" :value="index">
-                      {{ v.timestamp }} ({{ v.mbtiStyle }})
-                    </option>
-                  </select>
-                </div>
+                <!-- Header History Versions Manager Trigger -->
+                <button 
+                  @click="showHistoryModal = true"
+                  class="px-2.5 py-1 border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer ml-1"
+                >
+                  <span>📜 歷史版本管理</span>
+                  <span v-if="historyVersions.length > 0" class="px-1.5 py-0.2 bg-purple-600 text-white rounded-full text-[9px] font-bold">{{ historyVersions.length }}</span>
+                </button>
               </div>
             </div>
           </div>
@@ -596,4 +594,14 @@ const getLatestThinkingLine = (thoughts) => {
       </div>
     </div>
   </transition>
+
+  <!-- History Versions Time Machine Manager Modal -->
+  <HistoryVersionsModal
+    :show="showHistoryModal"
+    :history-versions="historyVersions"
+    @close="showHistoryModal = false"
+    @loadVersion="val => emit('loadVersion', val)"
+    @deleteVersion="val => emit('deleteVersion', val)"
+    @renameVersion="val => emit('renameVersion', val)"
+  />
 </template>

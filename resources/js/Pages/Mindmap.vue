@@ -1172,6 +1172,13 @@ const deleteHistoryVersion = (index) => {
   saveAiHistoryProgress()
 }
 
+const renameHistoryVersion = ({ index, newName }) => {
+  if (historyVersions.value[index]) {
+    historyVersions.value[index].label = newName
+    saveAiHistoryProgress()
+  }
+}
+
 const saveCurrentRunAsNewVersion = async () => {
   const hasOutputs = stageOutputs.value.some(out => out && out.trim())
   if (!hasOutputs) return
@@ -2518,6 +2525,7 @@ const selectedMultiProposalsCount = computed(() => {
       @loadVersion="loadHistoryVersion"
       @deleteVersion="deleteHistoryVersion"
       @saveVersion="saveCurrentRunAsNewVersion"
+      @renameVersion="renameHistoryVersion"
     />
     
     <!-- Import Raw Code Modal -->
