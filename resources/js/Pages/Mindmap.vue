@@ -1175,6 +1175,7 @@ const handleClear = () => {
 
 const handleSelectNode = ({ id, isMulti }) => {
   selectNode(id, isMulti)
+  showDetailsPanel.value = true
 }
 
 const batchDelete = () => {
