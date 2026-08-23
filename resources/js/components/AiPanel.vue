@@ -67,14 +67,30 @@
     </div>
 
     <!-- Project and File Info display -->
-    <div v-if="allowAiReadCode" class="px-4 py-2 bg-purple-50/30 border-b border-neutral-100 space-y-1 text-[10px] text-neutral-500 font-mono">
-      <div class="flex items-center justify-between">
+    <div v-if="allowAiReadCode" class="px-4 py-2 bg-purple-50/30 border-b border-neutral-100 space-y-1.5 text-[10px] text-neutral-500 font-mono">
+      <div class="flex items-center justify-between gap-2">
+        <span>👤 使用者:</span>
+        <select 
+          :value="selectedProjectUser"
+          @change="$emit('update:selectedProjectUser', $event.target.value)"
+          class="bg-white border border-neutral-200 rounded px-1.5 py-0.5 text-[9px] font-semibold text-purple-700 outline-none focus:border-purple-400 max-w-[130px] cursor-pointer"
+        >
+          <option v-for="user in projectUsers" :key="user" :value="user">{{ user }}</option>
+        </select>
+      </div>
+      <div class="flex items-center justify-between gap-2">
         <span>🎯 專案名稱:</span>
-        <span class="font-bold text-purple-700">{{ selectedProject || 'beartor' }}</span>
+        <select 
+          :value="selectedProject"
+          @change="$emit('update:selectedProject', $event.target.value)"
+          class="bg-white border border-neutral-200 rounded px-1.5 py-0.5 text-[9px] font-semibold text-purple-700 outline-none focus:border-purple-400 max-w-[130px] cursor-pointer"
+        >
+          <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
+        </select>
       </div>
       <div class="flex items-center justify-between">
         <span>📄 檢視檔案:</span>
-        <span class="truncate max-w-[150px] font-bold text-neutral-700" :title="selectedFile?.relative_path || '未選擇'">{{ selectedFile ? selectedFile.name : '未選擇' }}</span>
+        <span class="truncate max-w-[130px] font-bold text-neutral-700" :title="selectedFile?.relative_path || '未選擇'">{{ selectedFile ? selectedFile.name : '未選擇' }}</span>
       </div>
     </div>
 
@@ -203,6 +219,14 @@ const props = defineProps({
   selectedFileContent: {
     type: String,
     default: ''
+  },
+  projectUsers: {
+    type: Array,
+    default: () => []
+  },
+  projects: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -211,7 +235,9 @@ const emit = defineEmits([
   'trigger-multistage', 
   'update:apiEndpoint', 
   'update:apiModel', 
-  'update:allowAiReadCode'
+  'update:allowAiReadCode',
+  'update:selectedProject',
+  'update:selectedProjectUser'
 ])
 
 const showSettings = ref(false)

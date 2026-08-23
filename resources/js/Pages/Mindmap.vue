@@ -302,18 +302,20 @@ const nodeToEdit = ref(null)
 // AI Node Details Loading
 const aiDetailsLoading = ref(false)
 
-// 12-Stage Multi-stage analysis state
+// 13-Stage Multi-stage analysis state
 const showMultiStageModal = ref(false)
 const multiStageActions = ref([])
 const isMultiStageRunning = ref(false)
+const isMultiStagePaused = ref(false)
+const currentAnalyzingStageIndex = ref(0)
 const hasStartedMultiStage = ref(false)
 const showProgressSidebar = ref(false)
-const stageIsThinking = ref([false, false, false, false, false, false, false, false, false, false, false, false])
-const stageThoughts = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
-const showThoughtsCollapse = ref([false, false, false, false, false, false, false, false, false, false, false, false])
-const showStagesAccordion = ref([true, true, true, true, true, true, true, true, true, true, true, true])
-const stageRefinePrompts = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
-const stageIsRefining = ref([false, false, false, false, false, false, false, false, false, false, false, false])
+const stageIsThinking = ref([false, false, false, false, false, false, false, false, false, false, false, false, false])
+const stageThoughts = ref(['', '', '', '', '', '', '', '', '', '', '', '', ''])
+const showThoughtsCollapse = ref([false, false, false, false, false, false, false, false, false, false, false, false, false])
+const showStagesAccordion = ref([true, true, true, true, true, true, true, true, true, true, true, true, true])
+const stageRefinePrompts = ref(['', '', '', '', '', '', '', '', '', '', '', '', ''])
+const stageIsRefining = ref([false, false, false, false, false, false, false, false, false, false, false, false, false])
 
 // Pre-flight preferences
 const isUserEngineer = ref(true)
@@ -346,12 +348,23 @@ watch(apiModel, (newVal) => {
   localStorage.setItem('mindmap_ai_model', newVal)
 })
 
+watch(selectedProjectUser, () => {
+  fetchProjectsForUser()
+})
+
+watch(selectedProject, (newVal) => {
+  if (newVal) {
+    selectProject(newVal)
+  }
+})
+
 const multiStageStatusMessage = ref('')
 
-// Separate output for each stage (12 stages)
-const stageOutputs = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
+// Separate output for each stage (13 stages)
+const stageOutputs = ref(['', '', '', '', '', '', '', '', '', '', '', '', ''])
 
 const stagesProgress = ref([
+  { id: 0, name: '第 0 層：解讀現有代碼結構與分析意圖', status: 'idle' },
   { id: 1, name: '第一層：看圖說故事 (系統架構意圖與概覽)', status: 'idle' },
   { id: 2, name: '第二層：商業分析與業務價值規劃', status: 'idle' },
   { id: 3, name: '第三層：開發技術棧與語言適配分析 (Laravel, Vue, Tailwind, Python)', status: 'idle' },
@@ -426,6 +439,16 @@ onMounted(() => {
   loadMermaid().then(m => { mermaidInstance.value = m })
   loadChartJs().then(c => { chartJsInstance.value = c })
   loadBootstrapCss()
+
+  // Load project users list and default project in the background for instant AI Panel access
+  window.axios.get('/api/projects/users')
+    .then(res => {
+      if (res.data.success) {
+        projectUsers.value = res.data.users
+      }
+    })
+    .catch(err => console.error('取得使用者清單失敗：', err))
+  fetchProjectsForUser()
 
   window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -1132,7 +1155,26 @@ const isUserEngineerVal = isUserEngineer.value
 const mbtiStyleVal = mbtiStyle.value
 
 const triggerMultiStageAnalysisStart = () => {
-  runMultiStageAnalysis()
+  if (isMultiStagePaused.value) {
+    isMultiStagePaused.value = false
+    runMultiStageAnalysis(currentAnalyzingStageIndex.value)
+  } else {
+    stageOutputs.value = ['', '', '', '', '', '', '', '', '', '', '', '', '']
+    stagesProgress.value.forEach(s => s.status = 'idle')
+    multiStageActions.value = []
+    currentAnalyzingStageIndex.value = 0
+    isMultiStagePaused.value = false
+    runMultiStageAnalysis(0)
+  }
+}
+
+const pauseMultiStageAnalysis = () => {
+  isMultiStagePaused.value = true
+  isMultiStageRunning.value = false
+  multiStageStatusMessage.value = '⏸️ 分析已暫停，您可以隨時點擊「繼續」重啟。'
+  if (stagesProgress.value[currentAnalyzingStageIndex.value]) {
+    stagesProgress.value[currentAnalyzingStageIndex.value].status = 'idle'
+  }
 }
 
 const applyProposals = () => {
@@ -1285,19 +1327,22 @@ const triggerMultiStageSetup = () => {
   showMultiStageModal.value = true
   hasStartedMultiStage.value = false
   isMultiStageRunning.value = false
-  stageOutputs.value = ['', '', '', '', '', '', '', '', '', '', '', '']
+  isMultiStagePaused.value = false
+  currentAnalyzingStageIndex.value = 0
+  stageOutputs.value = ['', '', '', '', '', '', '', '', '', '', '', '', '']
   multiStageActions.value = []
   stagesProgress.value.forEach(s => s.status = 'idle')
-  stageIsThinking.value = [false, false, false, false, false, false, false, false, false, false, false, false]
-  stageThoughts.value = ['', '', '', '', '', '', '', '', '', '', '', '']
-  showThoughtsCollapse.value = [false, false, false, false, false, false, false, false, false, false, false, false]
-  showStagesAccordion.value = [true, true, true, true, true, true, true, true, true, true, true, true]
+  stageIsThinking.value = [false, false, false, false, false, false, false, false, false, false, false, false, false]
+  stageThoughts.value = ['', '', '', '', '', '', '', '', '', '', '', '', '']
+  showThoughtsCollapse.value = [false, false, false, false, false, false, false, false, false, false, false, false, false]
+  showStagesAccordion.value = [true, true, true, true, true, true, true, true, true, true, true, true, true]
 }
 
-// 12-Stage Sequential progressive AI reasoning pipeline
-const runMultiStageAnalysis = async () => {
+// 13-Stage Sequential progressive AI reasoning pipeline
+const runMultiStageAnalysis = async (startFromIdx = 0) => {
   hasStartedMultiStage.value = true
   isMultiStageRunning.value = true
+  isMultiStagePaused.value = false
   
   const apiEndpointVal = apiEndpoint.value
   const apiModelVal = apiModel.value
@@ -1412,8 +1457,15 @@ const runMultiStageAnalysis = async () => {
 - 重要輸出規定：請「直接使用 HTML 與 Bootstrap 5 樣式類別（例如 <div class="card mb-3"><div class="card-body">...</div></div>、<span class="badge bg-purple">...</span>、<div class="alert alert-info">...</div>、以及 <ul class="list-group">...</ul> 等）」來結構化、排版您的報告內容，不要輸出純 Markdown 格式段落。這能讓前端的 v-html 直接渲染出排版美觀的卡片、標籤、清單與警示。請保持程式碼結構合法、標籤正確閉合。
 `
 
-  // 12 Stage Prompts Config
+  // 13 Stage Prompts Config
   const stagePrompts = [
+    `【第 0 層：解讀現有代碼結構與分析意圖】
+請檢視分析目前已選定或上傳的專案目錄結構樹及代碼。
+請簡單向使用者說明：
+1. 該專案對應的代碼目錄結構與核心檔案分佈（如果是新功能，指出可以插入適配的檔案路徑）。
+2. 目前檢索到現有的設計概念與商業邏輯架構。
+請以此作為整份深度分析報告的起點與奠基導言。`,
+
     `【第 1 層：看圖說故事 (系統架構意圖與概覽)】
 請依據當前設計文件的完整心智圖結構（JSON）以及當前選取的節點「${nodeText}」，分析本節點在整個系統架構中的核心定位、意圖與系統整體概覽。`,
     
@@ -1491,10 +1543,14 @@ const runMultiStageAnalysis = async () => {
   ]
 
   try {
-    for (let i = 0; i < 12; i++) {
+    for (let i = startFromIdx; i < 13; i++) {
+      if (isMultiStagePaused.value) {
+        break
+      }
+      currentAnalyzingStageIndex.value = i
       stagesProgress.value[i].status = 'running'
       stageIsThinking.value[i] = true
-      multiStageStatusMessage.value = `🧠 AI 正在分析第 ${i + 1} 層：${stagesProgress.value[i].name}...`
+      multiStageStatusMessage.value = `🧠 AI 正在分析：${stagesProgress.value[i].name}...`
       
       const accumulatedContext = stageOutputs.value
         .map((out, idx) => out ? `### ${stagesProgress.value[idx].name}\n${out}` : '')
@@ -1979,8 +2035,10 @@ const selectedMultiProposalsCount = computed(() => {
           v-model:api-endpoint="apiEndpoint"
           v-model:api-model="apiModel"
           v-model:allow-ai-read-code="allowAiReadCode"
-          :selected-project="selectedProject"
-          :selected-project-user="selectedProjectUser"
+          v-model:selected-project="selectedProject"
+          v-model:selected-project-user="selectedProjectUser"
+          :project-users="projectUsers"
+          :projects="projects"
           :selected-file="selectedFile"
           :selected-file-content="selectedFileContent"
           @ai-proposals="onAiProposals"
@@ -2074,7 +2132,7 @@ const selectedMultiProposalsCount = computed(() => {
                 <SparklesIcon class="w-4 h-4 animate-pulse" />
               </div>
               <div class="flex flex-col md:flex-row md:items-center md:gap-3">
-                <h2 class="text-sm font-semibold text-neutral-800">Laravel + Vue 混合架構十二層深度分析區</h2>
+                <h2 class="text-sm font-semibold text-neutral-800">Laravel + Vue 混合架構十三層深度分析區</h2>
                 <div class="flex items-center gap-2 mt-1 md:mt-0">
                   <p class="text-[10px] md:text-[11px] text-neutral-400 m-0">分層級與客製化偏好，簡化評估、做法、細節與圖表</p>
                   <button 
@@ -2088,8 +2146,7 @@ const selectedMultiProposalsCount = computed(() => {
             </div>
             <button 
               @click="showMultiStageModal = false"
-              :disabled="isMultiStageRunning"
-              class="p-1 hover:bg-neutral-200/50 rounded-lg text-neutral-400 hover:text-neutral-700 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+              class="p-1 hover:bg-neutral-200/50 rounded-lg text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer"
             >
               <CloseIcon class="w-4 h-4" />
             </button>
@@ -2173,7 +2230,7 @@ const selectedMultiProposalsCount = computed(() => {
                 class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
               >
                 <SparklesIcon class="w-4 h-4 animate-pulse" />
-                <span>🚀 開始進行十二層架構可行性分析</span>
+                <span>🚀 開始進行十三層架構可行性分析</span>
               </button>
             </div>
           </div>
@@ -2418,7 +2475,6 @@ const selectedMultiProposalsCount = computed(() => {
             </div>
           </div>
 
-          <!-- Footer -->
           <div class="p-5 border-t border-neutral-100 flex items-center justify-between bg-neutral-50/50 shrink-0">
             <div class="flex items-center gap-4 flex-1">
               <span class="text-xs text-neutral-500">
@@ -2427,43 +2483,64 @@ const selectedMultiProposalsCount = computed(() => {
                 </template>
                 <template v-else-if="isMultiStageRunning">
                   <div class="flex flex-col gap-1 text-left">
-                    <div>正在為您進行第 <strong class="text-purple-600 font-semibold">{{ stagesProgress.filter(s => s.status === 'success').length + 1 }}</strong> / 12 層深度技術分析...</div>
+                    <div>正在為您進行：<strong class="text-purple-600 font-semibold">{{ stagesProgress[currentAnalyzingStageIndex]?.name || '分析中...' }}</strong> ({{ stagesProgress.filter(s => s.status === 'success').length + 1 }} / 13)</div>
                     <div class="text-[10px] text-purple-600 font-mono flex items-center gap-1.5 animate-pulse">
                       <SpinnerIcon class="w-3.5 h-3.5 animate-spin shrink-0 text-purple-500" />
-                      <span>{{ multiStageStatusMessage || '正在初始化 AI 分析核心...' }}</span>
+                      <span>{{ multiStageStatusMessage || '正在分析...' }}</span>
                     </div>
                   </div>
                 </template>
+                <template v-else-if="isMultiStagePaused">
+                  <div class="flex flex-col gap-1 text-left">
+                    <div class="font-semibold text-amber-600 flex items-center gap-1.5">
+                      <span>⏸️ 深度技術分析已暫停</span>
+                    </div>
+                    <div class="text-[10px] text-neutral-400 font-mono">目前已完成：{{ stagesProgress.filter(s => s.status === 'success').length }} / 13 層</div>
+                  </div>
+                </template>
                 <template v-else>
-                  十二層深度分析已順利完成！已選取套用 <strong class="text-purple-600 font-semibold">{{ selectedMultiProposalsCount }}</strong> / {{ multiStageActions.length }} 個結構調整
+                  十三層深度分析已順利完成！已選取套用 <strong class="text-purple-600 font-semibold">{{ selectedMultiProposalsCount }}</strong> / {{ multiStageActions.length }} 個結構調整
                 </template>
               </span>
               
               <!-- Grand Total Feasibility Score display -->
-              <div v-if="hasStartedMultiStage && !isMultiStageRunning" class="flex items-center gap-3 bg-neutral-100 px-3.5 py-1.5 rounded-xl border border-neutral-200/50">
+              <div v-if="hasStartedMultiStage && !isMultiStageRunning && !isMultiStagePaused" class="flex items-center gap-3 bg-neutral-100 px-3.5 py-1.5 rounded-xl border border-neutral-200/50">
                 <div class="text-xs font-bold text-neutral-700">綜合評估總分數：</div>
                 <div class="flex items-baseline gap-0.5">
                   <span class="text-base font-black text-purple-700 leading-none">{{ grandTotalScore }}</span>
-                  <span class="text-[10px] text-neutral-400">/ 110 滿分</span>
+                  <span class="text-[10px] text-neutral-400">/ 120 滿分</span>
                 </div>
-                <!-- Mini Progress Bar scaled to 110 -->
+                <!-- Mini Progress Bar scaled to 120 -->
                 <div class="w-16 h-2 bg-neutral-200 rounded-full overflow-hidden">
-                  <div class="h-full bg-purple-600 transition-all duration-500" :style="{ width: (grandTotalScore / 1.1) + '%' }"></div>
+                  <div class="h-full bg-purple-600 transition-all duration-500" :style="{ width: (grandTotalScore / 1.2) + '%' }"></div>
                 </div>
               </div>
             </div>
             
             <div class="flex items-center gap-3">
               <button 
+                v-if="isMultiStageRunning"
+                @click="pauseMultiStageAnalysis"
+                class="px-4 py-2 border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>⏸️ 暫停分析</span>
+              </button>
+              <button 
+                v-if="isMultiStagePaused"
+                @click="triggerMultiStageAnalysisStart"
+                class="px-4 py-2 border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>▶️ 繼續分析</span>
+              </button>
+              <button 
                 @click="showMultiStageModal = false"
-                :disabled="isMultiStageRunning"
-                class="px-4 py-2 border border-neutral-200 hover:bg-neutral-100 text-neutral-700 rounded-xl text-xs font-semibold transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                class="px-4 py-2 border border-neutral-200 hover:bg-neutral-100 text-neutral-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
               >
                 關閉
               </button>
               <button 
                 @click="applyMultiProposals"
-                :disabled="!hasStartedMultiStage || isMultiStageRunning || selectedMultiProposalsCount === 0"
+                :disabled="!hasStartedMultiStage || isMultiStageRunning || isMultiStagePaused || selectedMultiProposalsCount === 0"
                 class="px-5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5"
               >
                 <CheckIcon class="w-3.5 h-3.5" />
@@ -2894,5 +2971,18 @@ const selectedMultiProposalsCount = computed(() => {
         </div>
       </div>
     </transition>
+
+    <!-- Floating Multi-Stage Progress Restore Button -->
+    <div 
+      v-if="hasStartedMultiStage && !showMultiStageModal"
+      class="fixed bottom-6 right-24 z-40 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-full shadow-2xl flex items-center gap-2 transition-all hover:scale-105 cursor-pointer border border-purple-500/50"
+      @click="showMultiStageModal = true"
+    >
+      <SparklesIcon class="w-4 h-4 animate-spin-slow text-white" />
+      <span class="text-xs font-bold font-sans">
+        {{ isMultiStageRunning ? '📊 查看分析進度...' : (isMultiStagePaused ? '⏸️ 分析已暫停' : '✅ 檢視規劃報告') }}
+      </span>
+      <span v-if="isMultiStageRunning" class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+    </div>
   </div>
 </template>
