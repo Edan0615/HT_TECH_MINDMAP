@@ -38,6 +38,7 @@ const props = defineProps({
   selectedProjectUser: { type: String, default: '' },
   projectUsers: { type: Array, required: true },
   projectFiles: { type: Array, required: true },
+  projects: { type: Array, required: true },
   parseAndRenderContent: { type: Function, required: true },
   copyToClipboard: { type: Function, required: true }
 })
@@ -221,7 +222,7 @@ const handleRefine = () => {
                     @change="e => emit('update:selectedProject', e.target.value)"
                     class="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2 text-xs text-neutral-700 font-medium focus:outline-none focus:border-neutral-300 transition-colors"
                   >
-                    <option v-for="proj in projectFiles" :key="proj" :value="proj">{{ proj }}</option>
+                    <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
                   </select>
                 </div>
               </div>

@@ -2430,6 +2430,7 @@ const selectedMultiProposalsCount = computed(() => {
       :selected-project-user="selectedProjectUser"
       :project-users="projectUsers"
       :project-files="projectFiles"
+      :projects="projects"
       :parse-and-render-content="parseAndRenderContent"
       :copy-to-clipboard="copyToClipboard"
       @update:mbtiStyle="val => mbtiStyle = val"
