@@ -2487,13 +2487,40 @@ const selectedMultiProposalsCount = computed(() => {
             <!-- Right Side: VISUALLY SEPARATED Cards with HTML Previews, Math, and Mermaid Renderers -->
             <div class="w-full md:flex-1 flex flex-col min-h-0 bg-neutral-50/30 font-sans">
               <!-- Report Area using clean Card Layout -->
-              <div class="flex-1 p-4 md:p-6 overflow-y-auto space-y-6 min-h-0">
-                <h3 class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">分層架構分析報告明細</h3>
+              <div class="flex-1 p-4 md:p-6 overflow-y-auto space-y-4 min-h-0 flex flex-col">
+                <h3 class="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1">分層架構分析報告明細 (單層沉浸檢視)</h3>
                 
-                <div class="space-y-6">
+                <!-- Pagination Controls for Immersive Experience -->
+                <div class="flex items-center justify-between bg-white border border-neutral-200/60 px-4 py-2.5 rounded-xl shadow-sm mb-2 select-none shrink-0">
+                  <button 
+                    @click="currentViewedStageIndex = Math.max(0, currentViewedStageIndex - 1)"
+                    :disabled="currentViewedStageIndex === 0"
+                    class="px-3.5 py-1.5 border border-neutral-200 hover:bg-neutral-50 text-neutral-600 rounded-lg text-xs font-semibold disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-all"
+                  >
+                    <span>◀ 上一層</span>
+                  </button>
+                  <div class="text-center">
+                    <span class="text-xs font-bold text-neutral-800 font-sans block">
+                      {{ stagesProgress[currentViewedStageIndex]?.name.split('：')[0] || `第 ${currentViewedStageIndex} 層` }}
+                    </span>
+                    <span class="text-[9px] text-purple-600 font-mono font-bold block">
+                      {{ currentViewedStageIndex }} / 12 層級
+                    </span>
+                  </div>
+                  <button 
+                    @click="currentViewedStageIndex = Math.min(12, currentViewedStageIndex + 1)"
+                    :disabled="currentViewedStageIndex === 12"
+                    class="px-3.5 py-1.5 border border-neutral-200 hover:bg-neutral-50 text-neutral-600 rounded-lg text-xs font-semibold disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-all"
+                  >
+                    <span>下一層 ▶</span>
+                  </button>
+                </div>
+
+                <div class="space-y-6 flex-1">
                   <div 
                     v-for="(stage, idx) in stagesProgress" 
                     :key="stage.id"
+                    v-show="idx === currentViewedStageIndex"
                     :id="`analysis-stage-card-${stage.id}`"
                     class="border border-neutral-200/60 rounded-xl overflow-hidden shadow-sm bg-white"
                   >
@@ -2570,7 +2597,7 @@ const selectedMultiProposalsCount = computed(() => {
                       <span v-else-if="stage.status === 'idle'" class="text-neutral-300 italic">等待上游階段完成後解鎖...</span>
 
                       <!-- Stage 12 Copy Button (Prompt Clipboard Integration) -->
-                      <div v-if="idx === 11 && stageOutputs[idx] && !stageIsThinking[idx]" class="mt-4">
+                      <div v-if="idx === 12 && stageOutputs[idx] && !stageIsThinking[idx]" class="mt-4">
                         <button 
                           @click="copyToClipboard(stageOutputs[idx])"
                           class="flex items-center gap-1.5 px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold shadow-md hover:shadow-lg transition-all"
