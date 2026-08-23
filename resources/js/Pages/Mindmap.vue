@@ -410,6 +410,7 @@ watch(selectedProject, (newVal) => {
   }
 })
 
+const historyVersions = ref([])
 const multiStageStatusMessage = ref('')
 
 // Separate output for each stage (13 stages)
@@ -475,6 +476,9 @@ onMounted(() => {
     mindmap.value = props.mindmap.data
     selectedNodeIds.value = [mindmap.value.id]
     if (props.mindmap.ai_history) {
+      if (props.mindmap.ai_history.historyVersions) {
+        historyVersions.value = props.mindmap.ai_history.historyVersions
+      }
       if (props.mindmap.ai_history.stageOutputs) {
         stageOutputs.value = props.mindmap.ai_history.stageOutputs
       }
@@ -1127,11 +1131,48 @@ const batchColorSelection = (color) => {
 const isUserEngineerVal = isUserEngineer.value
 const mbtiStyleVal = mbtiStyle.value
 
+const archiveCurrentRunToHistory = () => {
+  const hasOutputs = stageOutputs.value.some(out => out && out.trim())
+  if (!hasOutputs) return
+
+  const timestamp = new Date().toLocaleString('zh-TW', { hour12: false })
+  const newArchive = {
+    timestamp,
+    mbtiStyle: mbtiStyle.value,
+    isUserEngineer: isUserEngineer.value,
+    stagesProgress: JSON.parse(JSON.stringify(stagesProgress.value)),
+    stageOutputs: JSON.parse(JSON.stringify(stageOutputs.value)),
+    stageLogs: JSON.parse(JSON.stringify(stageLogs.value)),
+    stageThoughts: JSON.parse(JSON.stringify(stageThoughts.value))
+  }
+  
+  historyVersions.value.unshift(newArchive)
+}
+
+const loadHistoryVersion = (version) => {
+  stagesProgress.value = JSON.parse(JSON.stringify(version.stagesProgress))
+  stageOutputs.value = JSON.parse(JSON.stringify(version.stageOutputs))
+  stageLogs.value = JSON.parse(JSON.stringify(version.stageLogs))
+  stageThoughts.value = JSON.parse(JSON.stringify(version.stageThoughts))
+  mbtiStyle.value = version.mbtiStyle || 'INTJ'
+  isUserEngineer.value = typeof version.isUserEngineer === 'boolean' ? version.isUserEngineer : true
+  hasStartedMultiStage.value = true
+  isMultiStageRunning.value = false
+  isMultiStagePaused.value = false
+  currentViewedStageIndex.value = 0
+}
+
+const deleteHistoryVersion = (index) => {
+  historyVersions.value.splice(index, 1)
+  saveAiHistoryProgress()
+}
+
 const triggerMultiStageAnalysisStart = () => {
   if (isMultiStagePaused.value) {
     isMultiStagePaused.value = false
     runMultiStageAnalysis(currentAnalyzingStageIndex.value)
   } else {
+    archiveCurrentRunToHistory()
     stageOutputs.value = ['', '', '', '', '', '', '', '', '', '', '', '', '']
     stagesProgress.value.forEach(s => s.status = 'idle')
     multiStageActions.value = []
@@ -1488,7 +1529,8 @@ const saveAiHistoryProgress = async () => {
       ai_history: {
         stageOutputs: stageOutputs.value,
         stagesProgress: stagesProgress.value,
-        stageLogs: stageLogs.value
+        stageLogs: stageLogs.value,
+        historyVersions: historyVersions.value
       }
     })
   } catch (e) {
@@ -2431,6 +2473,7 @@ const selectedMultiProposalsCount = computed(() => {
       :project-users="projectUsers"
       :project-files="projectFiles"
       :projects="projects"
+      :history-versions="historyVersions"
       :parse-and-render-content="parseAndRenderContent"
       :copy-to-clipboard="copyToClipboard"
       @update:mbtiStyle="val => mbtiStyle = val"
@@ -2448,6 +2491,8 @@ const selectedMultiProposalsCount = computed(() => {
       @refine="handleRefinementRequest"
       @applyProposals="applyMultiProposals"
       @print="generatePrintableReport"
+      @loadVersion="loadHistoryVersion"
+      @deleteVersion="deleteHistoryVersion"
     />
     
     <!-- Import Raw Code Modal -->

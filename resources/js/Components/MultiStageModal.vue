@@ -39,6 +39,7 @@ const props = defineProps({
   projectUsers: { type: Array, required: true },
   projectFiles: { type: Array, required: true },
   projects: { type: Array, required: true },
+  historyVersions: { type: Array, default: () => [] },
   parseAndRenderContent: { type: Function, required: true },
   copyToClipboard: { type: Function, required: true }
 })
@@ -58,7 +59,9 @@ const emit = defineEmits([
   'continue',
   'refine',
   'applyProposals',
-  'print'
+  'print',
+  'loadVersion',
+  'deleteVersion'
 ])
 
 // Local UI States
@@ -107,7 +110,7 @@ const getLatestThinkingLine = (thoughts) => {
             </div>
             <div class="flex flex-col md:flex-row md:items-center md:gap-3">
               <h2 class="text-sm font-semibold text-neutral-800">Laravel + Vue 混合架構十三層深度分析區</h2>
-              <div class="flex items-center gap-2 mt-1 md:mt-0">
+              <div class="flex items-center gap-2 mt-1 md:mt-0 flex-wrap">
                 <p class="text-[10px] md:text-[11px] text-neutral-400 m-0">分層級與客製化偏好，簡化評估、做法、細節與圖表</p>
                 <button 
                   @click="showProgressSidebar = !showProgressSidebar"
@@ -115,6 +118,20 @@ const getLatestThinkingLine = (thoughts) => {
                 >
                   {{ showProgressSidebar ? '◀ 收起進度' : '▶ 展開進度' }}
                 </button>
+                
+                <!-- Header History Versions Selector -->
+                <div v-if="historyVersions.length > 0" class="flex items-center gap-1 bg-purple-50/70 border border-purple-200 rounded px-1.5 py-0.5 ml-1">
+                  <span class="text-[9px] font-bold text-purple-800 select-none">📜 歷史版本:</span>
+                  <select 
+                    @change="e => { if (e.target.value !== '') { emit('loadVersion', historyVersions[e.target.value]); e.target.value = ''; } }"
+                    class="bg-transparent border-none text-[9px] text-purple-800 font-semibold focus:outline-none cursor-pointer p-0 pr-4"
+                  >
+                    <option value="">選擇切換歷史版本...</option>
+                    <option v-for="(v, index) in historyVersions" :key="index" :value="index">
+                      {{ v.timestamp }} ({{ v.mbtiStyle }})
+                    </option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -230,6 +247,43 @@ const getLatestThinkingLine = (thoughts) => {
                   >
                     <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
                   </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- History Versions List (If any exist) -->
+            <div v-if="historyVersions.length > 0" class="w-full border-t border-neutral-100 pt-5 space-y-3">
+              <div class="flex items-center justify-between">
+                <label class="block text-xs font-bold text-neutral-500 uppercase tracking-wider">📜 歷史分析報告存檔 (時光機)</label>
+                <span class="text-[10px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded font-bold">{{ historyVersions.length }} 個版本</span>
+              </div>
+              <div class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                <div 
+                  v-for="(v, index) in historyVersions" 
+                  :key="index"
+                  class="p-2.5 border border-neutral-200 rounded-xl flex items-center justify-between hover:bg-neutral-50/50 transition-colors"
+                >
+                  <div class="flex-1 min-w-0 pr-4">
+                    <div class="text-[11px] font-bold text-neutral-700 font-mono">{{ v.timestamp }}</div>
+                    <div class="text-[10px] text-neutral-400 mt-0.5">
+                      口吻：{{ v.mbtiStyle }} | 讀者：{{ v.isUserEngineer ? '工程師' : '通俗' }}
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button 
+                      @click="emit('loadVersion', v)"
+                      class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold border border-purple-200 transition-colors cursor-pointer"
+                    >
+                      載入此版本
+                    </button>
+                    <button 
+                      @click="emit('deleteVersion', index)"
+                      class="p-1 hover:bg-red-50 text-red-400 hover:text-red-600 rounded transition-colors cursor-pointer"
+                      title="刪除此版本"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
