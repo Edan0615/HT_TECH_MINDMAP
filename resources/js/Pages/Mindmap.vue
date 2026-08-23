@@ -352,6 +352,7 @@ const multiStageActions = ref([])
 const isMultiStageRunning = ref(false)
 const isMultiStagePaused = ref(false)
 const currentAnalyzingStageIndex = ref(0)
+const currentViewedStageIndex = ref(0)
 const hasStartedMultiStage = ref(false)
 const showProgressSidebar = ref(false)
 const stageIsThinking = ref([false, false, false, false, false, false, false, false, false, false, false, false, false])
@@ -1521,6 +1522,7 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
       activeAbortController = new AbortController()
 
       currentAnalyzingStageIndex.value = i
+      currentViewedStageIndex.value = i
       stagesProgress.value[i].status = 'running'
       stageIsThinking.value[i] = true
       multiStageStatusMessage.value = `🧠 AI 正在分析：${stagesProgress.value[i].name}...`
