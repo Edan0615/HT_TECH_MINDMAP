@@ -357,6 +357,9 @@ const hasStartedMultiStage = ref(false)
 const showProgressSidebar = ref(false)
 const stageIsThinking = ref([false, false, false, false, false, false, false, false, false, false, false, false, false])
 const stageThoughts = ref(['', '', '', '', '', '', '', '', '', '', '', '', ''])
+const stageLogs = ref(['', '', '', '', '', '', '', '', '', '', '', '', ''])
+const loadedFilesCache = ref([])
+const scannedFilesList = ref([])
 const showThoughtsCollapse = ref([false, false, false, false, false, false, false, false, false, false, false, false, false])
 const showStagesAccordion = ref([true, true, true, true, true, true, true, true, true, true, true, true, true])
 const stageRefinePrompts = ref(['', '', '', '', '', '', '', '', '', '', '', '', ''])
@@ -1381,6 +1384,9 @@ const triggerMultiStageSetup = () => {
   isMultiStagePaused.value = false
   currentAnalyzingStageIndex.value = 0
   stageOutputs.value = ['', '', '', '', '', '', '', '', '', '', '', '', '']
+  stageLogs.value = ['', '', '', '', '', '', '', '', '', '', '', '', '']
+  loadedFilesCache.value = []
+  scannedFilesList.value = []
   multiStageActions.value = []
   stagesProgress.value.forEach(s => s.status = 'idle')
   stageIsThinking.value = [false, false, false, false, false, false, false, false, false, false, false, false, false]
@@ -1529,15 +1535,7 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
 
       if (i === 0 && startFromIdx === 0) {
         const logToStage0 = (html) => {
-          stageOutputs.value[0] = `
-            <div class="p-3.5 bg-neutral-900 text-neutral-200 rounded-xl font-mono text-[11px] mb-4 space-y-1.5 border border-neutral-800 shadow-inner">
-              <div class="text-[10px] uppercase tracking-wider font-bold text-purple-400 mb-2 border-b border-neutral-800 pb-1 flex items-center justify-between">
-                <span>📂 原始碼沙盒檢索日誌</span>
-                <span class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping"></span>
-              </div>
-              ${html}
-            </div>
-          `
+          stageLogs.value[0] = html
         }
 
         let logHtml = `
@@ -1558,6 +1556,7 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
             
             if (treeRes.data.success && treeRes.data.files.length > 0) {
               const filesList = treeRes.data.files.map(f => f.relative_path)
+              scannedFilesList.value = filesList
               logHtml += `
                 <div class="text-emerald-400">
                   ✓ [SCAN SUCCESS] 已成功掃描專案目錄，共找到 ${filesList.length} 個檔案
@@ -1640,6 +1639,7 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
                     
                     if (fileRes.data.success) {
                       filesContext += `==== 檔案: ${path} ====\n\`\`\`\n${fileRes.data.content}\n\`\`\`\n\n`
+                      loadedFilesCache.value.push(path)
                       logHtml += `
                         <div class="text-neutral-400 text-[10px] pl-4">
                           - 已成功載入 ${path} (${fileRes.data.content.length} 字元)
@@ -1665,6 +1665,7 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
             let filesContext = `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. Analyze this project file context:\n`
             filesContext += `==== 檔案: ${selectedFile.value.relative_path} ====\n\`\`\`\n${selectedFileContent.value}\n\`\`\`\n\n`
             attachedCodeContext.value = filesContext
+            loadedFilesCache.value.push(selectedFile.value.relative_path)
             logHtml += `
               <div class="text-neutral-400 text-[10px] pl-4">
                 - 已成功載入 ${selectedFile.value.name} (${selectedFileContent.value.length} 字元)
@@ -1674,7 +1675,7 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
           } else {
             logHtml += `
               <div class="text-neutral-400">
-                ℹ [NO CONTEXT] 未開啟代碼閱讀權限且無手動載入檔案，僅基於心智圖內容進行分析。
+                ℹ [NO CONTEXT] 未開啟代碼閱讀權限且無手動載入檔案，僅基於心智圖內容進行 analysis。
               </div>
             `
             logToStage0(logHtml)
@@ -1687,6 +1688,140 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
         
         logHtml += `<div class="text-purple-400 font-bold mt-2 animate-pulse">[STREAM] AI 正在產出第 0 層分析報告中...</div>`
         logToStage0(logHtml)
+      } else if (i > 0 && allowAiReadCode.value) {
+        // Pass 1: Dynamic Pre-flight check for Stage 1 to 12
+        const targetProj = selectedProject.value || 'beartor'
+        if (scannedFilesList.value.length === 0) {
+          stageLogs.value[i] = `
+            <div class="flex items-center gap-2 text-purple-400">
+              <span class="animate-spin text-xs">⏳</span>
+              <span>[SCAN] 正在讀取並掃描專案目錄結構樹...</span>
+            </div>
+          `
+          try {
+            const treeRes = await window.axios.post('/api/projects/tree', { 
+              project: targetProj,
+              username: selectedProjectUser.value
+            })
+            if (treeRes.data.success && treeRes.data.files.length > 0) {
+              scannedFilesList.value = treeRes.data.files.map(f => f.relative_path)
+            }
+          } catch (treeErr) {
+            console.error(treeErr)
+          }
+        }
+
+        if (scannedFilesList.value.length > 0) {
+          let stageLogHtml = `
+            <div class="flex items-center gap-2 text-purple-400">
+              <span class="animate-spin text-xs">⏳</span>
+              <span>[PRE-FLIGHT] 正在分析本層級是否需要讀取額外代碼檔案...</span>
+            </div>
+          `
+          stageLogs.value[i] = stageLogHtml
+
+          try {
+            const cacheHint = loadedFilesCache.value.length > 0
+              ? `目前快取中已精讀載入的檔案：\n${JSON.stringify(loadedFilesCache.value)}`
+              : '目前尚未讀取任何代碼檔案。'
+
+            const checkRes = await fetch(`${apiEndpointVal}/v1/chat/completions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: activeAbortController.signal,
+              body: JSON.stringify({
+                model: apiModelVal,
+                messages: [
+                  { 
+                    role: 'system', 
+                    content: '你是一位代碼檢索精讀助手。請審查當前分析主題、指示，對比專案檔案清單與已加載的快取。判斷為了進行本層任務，是否需要讀取額外的檔案內容。如果需要，請只回傳一個包含所需檔案相對路徑的 JSON 陣列，例如：["app/Models/User.php"]（一次不超過 3 個，且不要包含任何已在快取中的路徑）。如果不需要加載任何新檔案，請務必且只回傳 ["NONE"]。請絕不要包含 markdown 格式、註解或說明。' 
+                  },
+                  { 
+                    role: 'user', 
+                    content: `當前分析階段：${stagesProgress.value[i].name}\n分析任務指示：${stagePrompts[i]}\n\n專案檔案清單：\n${JSON.stringify(scannedFilesList.value.slice(0, 300))}\n\n${cacheHint}\n\n請回傳所需 JSON 相對路徑陣列或 ["NONE"]：` 
+                  }
+                ],
+                temperature: 0.1
+              })
+            })
+
+            if (checkRes.ok) {
+              const checkData = await checkRes.json()
+              const checkDecision = checkData.choices[0]?.message?.content || ''
+              
+              let requestedPaths = []
+              try {
+                const arrMatch = checkDecision.match(/\[\s*([\s\S]*?)\s*\]/)
+                if (arrMatch) {
+                  requestedPaths = JSON.parse(arrMatch[0])
+                } else {
+                  requestedPaths = JSON.parse(checkDecision.trim())
+                }
+              } catch (e) {
+                scannedFilesList.value.forEach(path => {
+                  if (checkDecision.includes(path) && !loadedFilesCache.value.includes(path) && requestedPaths.length < 3) {
+                    requestedPaths.push(path)
+                  }
+                })
+              }
+
+              requestedPaths = requestedPaths.filter(p => p !== 'NONE' && p !== 'none' && !loadedFilesCache.value.includes(p))
+
+              if (requestedPaths && requestedPaths.length > 0) {
+                requestedPaths = requestedPaths.slice(0, 3)
+                stageLogHtml = `
+                  <div class="text-amber-400 font-bold">
+                    ✓ [AI REQUESTED] 本層分析需要加載並精讀以下檔案：
+                  </div>
+                  <div class="pl-4 text-neutral-300">
+                    ${requestedPaths.map(p => `• ${p}`).join('<br/>')}
+                  </div>
+                `
+                stageLogs.value[i] = stageLogHtml
+
+                let newContext = attachedCodeContext.value || '[CRITICAL SECURITY BOUNDARY] Sandbox Context:\n\n'
+                
+                for (const path of requestedPaths) {
+                  stageLogHtml += `
+                    <div class="flex items-center gap-2 text-purple-400 animate-pulse">
+                      <span>⏳</span>
+                      <span>[READING] 正在加載檔案: ${path}...</span>
+                    </div>
+                  `
+                  stageLogs.value[i] = stageLogHtml
+
+                  const fileRes = await window.axios.post('/api/projects/read', {
+                    project: targetProj,
+                    file_path: path,
+                    username: selectedProjectUser.value
+                  })
+
+                  if (fileRes.data.success) {
+                    newContext += `==== 檔案: ${path} ====\n\`\`\`\n${fileRes.data.content}\n\`\`\`\n\n`
+                    loadedFilesCache.value.push(path)
+                    stageLogHtml += `
+                      <div class="text-neutral-400 text-[10px] pl-4">
+                        - 已成功載入 ${path} (${fileRes.data.content.length} 字元)
+                      </div>
+                    `
+                    stageLogs.value[i] = stageLogHtml
+                  }
+                }
+                
+                attachedCodeContext.value = newContext
+                stageLogHtml += `<div class="text-emerald-400 font-bold mt-1">✓ [READY] 代碼合流成功，正式啟動本層架構分析。</div>`
+                stageLogs.value[i] = stageLogHtml
+              } else {
+                stageLogHtml = `<div class="text-emerald-400">✓ [CACHE READY] 快取脈絡已足夠，無需讀取新檔案。開始分析本層架構！</div>`
+                stageLogs.value[i] = stageLogHtml
+              }
+            }
+          } catch (checkErr) {
+            console.error('Pre-flight dynamic file retrieval error:', checkErr)
+            stageLogHtml += `<div class="text-amber-500">[WARN] 預檢分析發生異常 (${checkErr.message})，將使用現有快取繼續。</div>`
+            stageLogs.value[i] = stageLogHtml
+          }
+        }
       }
       
       const accumulatedContext = stageOutputs.value
@@ -2544,11 +2679,17 @@ const selectedMultiProposalsCount = computed(() => {
                       </div>
                     </div>
                     
-                    <!-- Stage Content -->
                     <div 
-                      v-show="showStagesAccordion[idx]"
                       class="p-4 text-xs leading-relaxed text-neutral-700 bg-white relative border-t border-neutral-50"
                     >
+                      <!-- Stage Terminal Logs (Show what AI is doing behind the scenes) -->
+                      <div v-if="stageLogs[idx]" class="p-3.5 bg-neutral-900 text-neutral-200 rounded-xl font-mono text-[11px] mb-4 space-y-1.5 border border-neutral-800 shadow-inner select-text">
+                        <div class="text-[10px] uppercase tracking-wider font-bold text-purple-400 mb-2 border-b border-neutral-800 pb-1 flex items-center justify-between select-none">
+                          <span>⚙️ 本層技術分析預檢日誌</span>
+                          <span v-if="stageIsThinking[idx]" class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping"></span>
+                        </div>
+                        <div class="space-y-1.5" v-html="stageLogs[idx]"></div>
+                      </div>
                       
                       <!-- 1. Active Thinking Panel (Streaming text visible, with a cool frosted/foggy glass overlay) -->
                       <div v-if="stageIsThinking[idx] && stageThoughts[idx]" class="relative border border-purple-100/70 rounded-xl bg-purple-50/5 p-4 mb-4 overflow-hidden">
