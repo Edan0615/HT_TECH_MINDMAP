@@ -17,6 +17,7 @@ class ProjectReaderController extends Controller
 
     /**
      * Dynamic base path getter based on username request parameter.
+     * All authenticated users are allowed to choose other usernames (these are all our own people).
      */
     protected function getBasePath(Request $request)
     {
@@ -33,8 +34,9 @@ class ProjectReaderController extends Controller
     /**
      * List all users who have project folders.
      */
-    public function listUsers()
+    public function listUsers(Request $request)
     {
+
         $users = [];
         if (File::exists('/home')) {
             $homeDirs = File::directories('/home');

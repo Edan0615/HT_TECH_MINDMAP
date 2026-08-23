@@ -335,6 +335,8 @@ watch(apiModel, (newVal) => {
   localStorage.setItem('mindmap_ai_model', newVal)
 })
 
+const multiStageStatusMessage = ref('')
+
 // Separate output for each stage (12 stages)
 const stageOutputs = ref(['', '', '', '', '', '', '', '', '', '', '', ''])
 
@@ -1295,14 +1297,17 @@ const runMultiStageAnalysis = async () => {
   
   // Dynamic agentic file context selector for 12-stage analysis
   if (allowAiReadCode.value) {
+    const targetProj = selectedProject.value || 'beartor'
+    multiStageStatusMessage.value = '🔍 正在掃描並讀取專案目錄結構樹...'
     try {
       const treeRes = await window.axios.post('/api/projects/tree', { 
-        project: selectedProject.value,
+        project: targetProj,
         username: selectedProjectUser.value
       })
       if (treeRes.data.success && treeRes.data.files.length > 0) {
         const filesList = treeRes.data.files.map(f => f.relative_path)
         
+        multiStageStatusMessage.value = '🧠 AI 正在分析目錄，決定精讀哪些原始碼檔案...'
         // Ask AI which files it needs based on the core mindmap node topic
         const preFlightRes = await fetch(`${apiEndpointVal}/v1/chat/completions`, {
           method: 'POST',
@@ -1312,7 +1317,7 @@ const runMultiStageAnalysis = async () => {
             messages: [
               { 
                 role: 'system', 
-                content: '你是一個專案目錄結構預檢大師。請閱讀提供的檔案列表，依據使用者的任務指示，回傳一個包含最多 3 個必須精讀的檔案相對路徑之 JSON 陣列。請只回傳陣列 JSON本身，例如：["app/Http/Controllers/HomeController.php"]，絕不要包含任何其它解釋或 Markdown 語法外框。' 
+                content: '你是一個專案目錄結構預檢大師。請閱讀提供的檔案列表，依據使用者的任務指示，回傳一個包含最多 3 個必須精讀的檔案相對路徑之 JSON 陣列。請只回傳陣列 JSON本身，例如：["app/Http/Controllers/HomeController.php"]，絕不要包含 any other explanation or Markdown markup.' 
               },
               { 
                 role: 'user', 
@@ -1349,8 +1354,9 @@ const runMultiStageAnalysis = async () => {
             
             for (const path of targetPaths) {
               try {
+                multiStageStatusMessage.value = `📖 正在讀取並精讀專案檔案：${path}...`
                 const fileRes = await window.axios.post('/api/projects/read', {
-                  project: selectedProject.value,
+                  project: targetProj,
                   file_path: path,
                   username: selectedProjectUser.value
                 })
@@ -1368,6 +1374,7 @@ const runMultiStageAnalysis = async () => {
       console.error('12階段檔案結構預檢失敗:', err)
     }
   } else if (selectedFile.value && selectedFileContent.value) {
+    multiStageStatusMessage.value = `📖 正在將已選擇的檔案「${selectedFile.value.name}」載入 AI 上下文...`
     attachedCodeContext += `[CRITICAL SECURITY BOUNDARY] You are running in a strictly READ-ONLY sandbox. Analyze this project file context to execute your 12-stage report:\n`
     attachedCodeContext += `==== 檔案: ${selectedFile.value.relative_path} ====\n\`\`\`\n${selectedFileContent.value}\n\`\`\`\n\n`
   }
@@ -1476,6 +1483,7 @@ const runMultiStageAnalysis = async () => {
     for (let i = 0; i < 12; i++) {
       stagesProgress.value[i].status = 'running'
       stageIsThinking.value[i] = true
+      multiStageStatusMessage.value = `🧠 AI 正在分析第 ${i + 1} 層：${stagesProgress.value[i].name}...`
       
       const accumulatedContext = stageOutputs.value
         .map((out, idx) => out ? `### ${stagesProgress.value[idx].name}\n${out}` : '')
@@ -1493,12 +1501,14 @@ ${fullMindmapJson}
 ${accumulatedContext}
 \`\`\`
 
+[CRITICAL INSTRUCTION] 請「僅限」針對本階段（${stagesProgress.value[i].name}）的特定主題進行深入分析與撰寫，絕對不可以提前撰寫後續其他階段的內容（例如：如果在第 1 或第 2 層，絕對不要自行輸出資料庫規劃、Migration 或 Mermaid 圖，這些會在後續的特定圖表層由程式安排生成）。請將注意力 100% 集中在本層規定的任務。
+
 請接續上面的分析報告，依據以下指示與風格設定撰寫本次部分的報告內容：
 ${stagePrompts[i]}
 
 重要規定與表達風格：
 ${customStylePrompt}
-- 請務必且只能使用「繁體中文」(Traditional Chinese) 進行文字回答。直接開始回答，不要有任何客套話。`
+- 請務必且只能使用「繁體中文」(Traditional Chinese) 進行文字回答。直接開始回答，不要有防廢話。`
 
       try {
         const res = await fetch(`${apiEndpointVal}/v1/chat/completions`, {
@@ -1607,6 +1617,7 @@ ${customStylePrompt}
     console.error('多層分析出錯並終止:', error.message)
   } finally {
     isMultiStageRunning.value = false
+    multiStageStatusMessage.value = ''
   }
 }
 
@@ -2397,7 +2408,13 @@ const selectedMultiProposalsCount = computed(() => {
                   配置偏好後即可啟動深度技術分析
                 </template>
                 <template v-else-if="isMultiStageRunning">
-                  正在為您進行第 <strong class="text-purple-600 font-semibold">{{ stagesProgress.filter(s => s.status === 'success').length + 1 }}</strong> / 12 層深度技術分析...
+                  <div class="flex flex-col gap-1 text-left">
+                    <div>正在為您進行第 <strong class="text-purple-600 font-semibold">{{ stagesProgress.filter(s => s.status === 'success').length + 1 }}</strong> / 12 層深度技術分析...</div>
+                    <div class="text-[10px] text-purple-600 font-mono flex items-center gap-1.5 animate-pulse">
+                      <SpinnerIcon class="w-3.5 h-3.5 animate-spin shrink-0 text-purple-500" />
+                      <span>{{ multiStageStatusMessage || '正在初始化 AI 分析核心...' }}</span>
+                    </div>
+                  </div>
                 </template>
                 <template v-else>
                   十二層深度分析已順利完成！已選取套用 <strong class="text-purple-600 font-semibold">{{ selectedMultiProposalsCount }}</strong> / {{ multiStageActions.length }} 個結構調整

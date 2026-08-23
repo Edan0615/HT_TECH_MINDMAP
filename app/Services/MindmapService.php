@@ -43,6 +43,16 @@ class MindmapService
     {
         if ($id) {
             $mindmap = Mindmap::findOrFail($id);
+            
+            // Authorization check
+            $loginUser = strtolower(explode('@', $user->email)[0]);
+            if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $loginUser)) {
+                $loginUser = strtolower($user->name);
+            }
+            if ($mindmap->user_id !== $user->id && $loginUser !== 'edan898') {
+                abort(403, '您沒有權限修改此心智圖！');
+            }
+
             $mindmap->update([
                 'title' => $data['title'] ?? '未命名心智圖',
                 'folder' => $data['folder'] ?? '網站',
@@ -70,6 +80,16 @@ class MindmapService
     public function deleteMindmap(User $user, int $id): bool
     {
         $mindmap = Mindmap::findOrFail($id);
+        
+        // Authorization check
+        $loginUser = strtolower(explode('@', $user->email)[0]);
+        if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $loginUser)) {
+            $loginUser = strtolower($user->name);
+        }
+        if ($mindmap->user_id !== $user->id && $loginUser !== 'edan898') {
+            abort(403, '您沒有權限刪除此心智圖！');
+        }
+
         return $mindmap->delete();
     }
 }
