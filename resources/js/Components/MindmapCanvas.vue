@@ -26,7 +26,7 @@
       :style="{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }"
     >
       <!-- SVG Overlay for Connecting Lines -->
-      <svg class="absolute inset-0 pointer-events-none w-[5000px] h-[5000px]">
+      <svg class="absolute inset-0 pointer-events-none w-[30000px] h-[30000px]" style="overflow: visible;">
         <path 
           v-for="conn in connections" 
           :key="conn.id" 

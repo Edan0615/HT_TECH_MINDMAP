@@ -3,13 +3,13 @@ import { ref, onMounted, onUnmounted, computed, watch, nextTick, defineComponent
 import { Link, router } from '@inertiajs/vue3'
 import { useMindmap } from '@/composables/useMindmap'
 import { parseMermaidToTree, parseRawJson } from '@/utils/codeParser'
-import DocumentOutline from '@/components/DocumentOutline.vue'
-import MindmapCanvas from '@/components/MindmapCanvas.vue'
-import AiPanel from '@/components/AiPanel.vue'
-import ImportCodeModal from '@/components/ImportCodeModal.vue'
-import AiProposalsModal from '@/components/AiProposalsModal.vue'
-import NodeDetailsDrawer from '@/components/NodeDetailsDrawer.vue'
-import MultiStageModal from '@/components/MultiStageModal.vue'
+import DocumentOutline from '@/Components/DocumentOutline.vue'
+import MindmapCanvas from '@/Components/MindmapCanvas.vue'
+import AiPanel from '@/Components/AiPanel.vue'
+import ImportCodeModal from '@/Components/ImportCodeModal.vue'
+import AiProposalsModal from '@/Components/AiProposalsModal.vue'
+import NodeDetailsDrawer from '@/Components/NodeDetailsDrawer.vue'
+import MultiStageModal from '@/Components/MultiStageModal.vue'
 
 const props = defineProps({
   mindmap: {
