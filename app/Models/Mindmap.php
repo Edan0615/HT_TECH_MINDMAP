@@ -30,4 +30,12 @@ class Mindmap extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /**
+     * Get the revision logs for this mindmap.
+     */
+    public function logs()
+    {
+        return $this->hasMany(MindmapLog::class);
+    }
 }

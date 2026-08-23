@@ -28,7 +28,7 @@ class MindmapService
      */
     public function getUserMindmap(User $user, int $id): ?Mindmap
     {
-        return Mindmap::with('user')->find($id);
+        return Mindmap::with(['user', 'logs.user'])->find($id);
     }
 
     /**
@@ -41,33 +41,70 @@ class MindmapService
      */
     public function saveMindmap(User $user, array $data, ?int $id = null): Mindmap
     {
+        $newData = $data['data'] ?? [];
+        $newTitle = $data['title'] ?? '未命名心智圖';
+        $newFolder = $data['folder'] ?? '網站';
+
         if ($id) {
             $mindmap = Mindmap::findOrFail($id);
+            $oldData = $mindmap->data;
             
-            // Authorization check
-            $loginUser = strtolower(explode('@', $user->email)[0]);
-            if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $loginUser)) {
-                $loginUser = strtolower($user->name);
-            }
-            if ($mindmap->user_id !== $user->id && $loginUser !== 'edan898') {
-                abort(403, '您沒有權限修改此心智圖！');
+            // Compare and log changes
+            $changes = $this->diffMindmap($oldData, $newData);
+            if (!empty($changes)) {
+                $summary = $user->name . " 變更了 " . count($changes) . " 處結構";
+                
+                if ($mindmap->title !== $newTitle) {
+                    $changes[] = "將標題從「{$mindmap->title}」修改為「{$newTitle}」";
+                }
+                if ($mindmap->folder !== $newFolder) {
+                    $changes[] = "將資料夾從「{$mindmap->folder}」修改為「{$newFolder}」";
+                }
+                
+                $mindmap->logs()->create([
+                    'user_id' => $user->id,
+                    'action_summary' => $summary,
+                    'details' => $changes
+                ]);
+            } else if ($mindmap->title !== $newTitle || $mindmap->folder !== $newFolder) {
+                $changes = [];
+                if ($mindmap->title !== $newTitle) {
+                    $changes[] = "將標題從「{$mindmap->title}」修改為「{$newTitle}」";
+                }
+                if ($mindmap->folder !== $newFolder) {
+                    $changes[] = "將資料夾從「{$mindmap->folder}」修改為「{$newFolder}」";
+                }
+                $mindmap->logs()->create([
+                    'user_id' => $user->id,
+                    'action_summary' => $user->name . " 變更了標題/資料夾偏好",
+                    'details' => $changes
+                ]);
             }
 
             $mindmap->update([
-                'title' => $data['title'] ?? '未命名心智圖',
-                'folder' => $data['folder'] ?? '網站',
-                'data' => $data['data'] ?? [],
+                'title' => $newTitle,
+                'folder' => $newFolder,
+                'data' => $newData,
                 'ai_history' => $data['ai_history'] ?? null,
             ]);
             return $mindmap;
         }
 
-        return $user->mindmaps()->create([
-            'title' => $data['title'] ?? '未命名心智圖',
-            'folder' => $data['folder'] ?? '網站',
-            'data' => $data['data'] ?? [],
+        $mindmap = $user->mindmaps()->create([
+            'title' => $newTitle,
+            'folder' => $newFolder,
+            'data' => $newData,
             'ai_history' => $data['ai_history'] ?? null,
         ]);
+
+        // Log the creation
+        $mindmap->logs()->create([
+            'user_id' => $user->id,
+            'action_summary' => $user->name . " 創建了此設計藍圖",
+            'details' => ["創建新專案，核心節點主題為：「{$newTitle}」"]
+        ]);
+
+        return $mindmap;
     }
 
     /**
@@ -80,16 +117,74 @@ class MindmapService
     public function deleteMindmap(User $user, int $id): bool
     {
         $mindmap = Mindmap::findOrFail($id);
-        
-        // Authorization check
-        $loginUser = strtolower(explode('@', $user->email)[0]);
-        if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $loginUser)) {
-            $loginUser = strtolower($user->name);
-        }
-        if ($mindmap->user_id !== $user->id && $loginUser !== 'edan898') {
-            abort(403, '您沒有權限刪除此心智圖！');
+        return $mindmap->delete();
+    }
+
+    /**
+     * Compute differences between old and new mindmap JSON structures.
+     */
+    protected function diffMindmap($oldData, $newData): array
+    {
+        if (empty($oldData) || empty($newData)) {
+            return [];
         }
 
-        return $mindmap->delete();
+        $oldFlat = [];
+        $this->flattenTree($oldData, $oldFlat);
+
+        $newFlat = [];
+        $this->flattenTree($newData, $newFlat);
+
+        $changes = [];
+
+        // Added and modified
+        foreach ($newFlat as $id => $node) {
+            if (!isset($oldFlat[$id])) {
+                $changes[] = "新增節點「{$node['text']}」";
+            } else {
+                $oldNode = $oldFlat[$id];
+                $nodeChanges = [];
+                if ($node['text'] !== $oldNode['text']) {
+                    $nodeChanges[] = "內容從「{$oldNode['text']}」改為「{$node['text']}」";
+                }
+                if ($node['color'] !== $oldNode['color']) {
+                    $nodeChanges[] = "顏色從「{$oldNode['color']}」改為「{$node['color']}」";
+                }
+                if (!empty($nodeChanges)) {
+                    $changes[] = "修改節點「{$node['text']}」: " . implode(', ', $nodeChanges);
+                }
+            }
+        }
+
+        // Deleted
+        foreach ($oldFlat as $id => $node) {
+            if (!isset($newFlat[$id])) {
+                $changes[] = "刪除節點「{$node['text']}」";
+            }
+        }
+
+        return $changes;
+    }
+
+    /**
+     * Flattens the node tree recursively.
+     */
+    protected function flattenTree($node, &$result)
+    {
+        if (empty($node)) return;
+        
+        $id = $node['id'] ?? null;
+        if ($id) {
+            $result[$id] = [
+                'text' => $node['text'] ?? '',
+                'color' => $node['color'] ?? '',
+            ];
+        }
+
+        if (!empty($node['children'])) {
+            foreach ($node['children'] as $child) {
+                $this->flattenTree($child, $result);
+            }
+        }
     }
 }
