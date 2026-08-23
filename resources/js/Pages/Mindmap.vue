@@ -324,6 +324,7 @@ watch(() => mindmap.value, (newVal) => {
 const showOutline = ref(true)
 const showAiPanel = ref(true)
 const attachedCodeContext = ref('')
+let activeAbortController = null
 const showDetailsPanel = ref(false)
 const selectedTemplate = ref('software_design')
 const fileInputRef = ref(null)
@@ -1215,8 +1216,13 @@ const pauseMultiStageAnalysis = () => {
   isMultiStagePaused.value = true
   isMultiStageRunning.value = false
   multiStageStatusMessage.value = '⏸️ 分析已暫停，您可以隨時點擊「繼續」重啟。'
+  if (activeAbortController) {
+    activeAbortController.abort()
+    activeAbortController = null
+  }
   if (stagesProgress.value[currentAnalyzingStageIndex.value]) {
     stagesProgress.value[currentAnalyzingStageIndex.value].status = 'idle'
+    stageIsThinking.value[currentAnalyzingStageIndex.value] = false
   }
 }
 
@@ -1508,6 +1514,11 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
       if (isMultiStagePaused.value) {
         break
       }
+      if (activeAbortController) {
+        activeAbortController.abort()
+      }
+      activeAbortController = new AbortController()
+
       currentAnalyzingStageIndex.value = i
       stagesProgress.value[i].status = 'running'
       stageIsThinking.value[i] = true
@@ -1558,6 +1569,7 @@ const runMultiStageAnalysis = async (startFromIdx = 0) => {
               const preFlightRes = await fetch(`${apiEndpointVal}/v1/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                signal: activeAbortController.signal,
                 body: JSON.stringify({
                   model: apiModelVal,
                   messages: [
@@ -1703,6 +1715,7 @@ ${customStylePrompt}
         const res = await fetch(`${apiEndpointVal}/v1/chat/completions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: activeAbortController.signal,
           body: JSON.stringify({
             model: apiModelVal,
             messages: [
@@ -1774,6 +1787,10 @@ ${customStylePrompt}
         stagesProgress.value[i].status = 'success'
         stageIsThinking.value[i] = false
       } catch (innerError) {
+        if (innerError.name === 'AbortError') {
+          console.log('AI analysis request aborted successfully.')
+          return
+        }
         stagesProgress.value[i].status = 'error'
         stageIsThinking.value[i] = false
         stageOutputs.value[i] = `<div class="alert alert-danger m-0 p-3"><strong>⚠️ 呼叫 AI 發生錯誤：</strong><span class="font-mono text-xs d-block mt-1">${innerError.message}</span><span class="d-block mt-2 text-muted">請確認您的 AI 端點設定與網路狀態是否正常。</span></div>`
@@ -2104,7 +2121,7 @@ const selectedMultiProposalsCount = computed(() => {
         >
           <div 
             v-if="showDetailsPanel && selectedNode"
-            class="h-72 bg-white border-t border-neutral-100 flex flex-col shrink-0 relative z-20 shadow-lg no-select"
+            class="h-72 bg-white border-t border-neutral-100 flex flex-col shrink-0 relative z-20 shadow-lg"
           >
             <!-- Drawer Header -->
             <div class="h-10 px-6 border-b border-neutral-100 bg-neutral-50/50 flex items-center justify-between">
@@ -2144,7 +2161,7 @@ const selectedMultiProposalsCount = computed(() => {
               </div>
 
               <!-- Right side: JSON Custom Attributes -->
-              <div class="w-80 pl-4 flex flex-col space-y-2 shrink-0 select-none">
+              <div class="w-80 pl-4 flex flex-col space-y-2 shrink-0">
                 <div class="flex items-center justify-between">
                   <label class="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">📊 節點自訂屬性 (JSON Properties)</label>
                   <button 
@@ -2157,7 +2174,7 @@ const selectedMultiProposalsCount = computed(() => {
                 
                 <!-- Properties List -->
                 <div class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
-                  <div v-if="!selectedNode.properties || Object.keys(selectedNode.properties).length === 0" class="h-full flex items-center justify-center text-[10px] text-neutral-400 italic">
+                  <div v-if="!selectedNode.properties || Object.keys(selectedNode.properties || {}).length === 0" class="h-full flex items-center justify-center text-[10px] text-neutral-400 italic">
                     尚未設定自訂欄位。點擊上方新增。
                   </div>
                   <div 
@@ -2485,7 +2502,7 @@ const selectedMultiProposalsCount = computed(() => {
                       class="bg-neutral-50/80 px-4 py-3 border-b border-neutral-100 flex items-center justify-between text-xs font-semibold text-neutral-700 cursor-pointer select-none hover:bg-neutral-100/70 transition-colors"
                     >
                       <span class="flex items-center gap-1.5">
-                        <span class="w-4 h-4 rounded-full bg-neutral-200 text-neutral-700 flex items-center justify-center text-[9px]">{{ idx + 1 }}</span>
+                        <span class="w-4 h-4 rounded-full bg-neutral-200 text-neutral-700 flex items-center justify-center text-[9px]">{{ idx }}</span>
                         <span>{{ stage.name }}</span>
                       </span>
                       <div class="flex items-center gap-3">
@@ -2660,7 +2677,7 @@ const selectedMultiProposalsCount = computed(() => {
                 </template>
                 <template v-else-if="isMultiStageRunning">
                   <div class="flex flex-col gap-1 text-left">
-                    <div>正在為您進行：<strong class="text-purple-600 font-semibold">{{ stagesProgress[currentAnalyzingStageIndex]?.name || '分析中...' }}</strong> ({{ stagesProgress.filter(s => s.status === 'success').length + 1 }} / 13)</div>
+                    <div>正在為您進行：<strong class="text-purple-600 font-semibold">{{ stagesProgress[currentAnalyzingStageIndex]?.name || '分析中...' }}</strong> ({{ currentAnalyzingStageIndex }} / 12)</div>
                     <div class="text-[10px] text-purple-600 font-mono flex items-center gap-1.5 animate-pulse">
                       <SpinnerIcon class="w-3.5 h-3.5 animate-spin shrink-0 text-purple-500" />
                       <span>{{ multiStageStatusMessage || '正在分析...' }}</span>
@@ -2672,11 +2689,11 @@ const selectedMultiProposalsCount = computed(() => {
                     <div class="font-semibold text-amber-600 flex items-center gap-1.5">
                       <span>⏸️ 深度技術分析已暫停</span>
                     </div>
-                    <div class="text-[10px] text-neutral-400 font-mono">目前已完成：{{ stagesProgress.filter(s => s.status === 'success').length }} / 13 層</div>
+                    <div class="text-[10px] text-neutral-400 font-mono">目前暫停於：第 {{ currentAnalyzingStageIndex }} 層 (共 12 層)</div>
                   </div>
                 </template>
                 <template v-else>
-                  十三層深度分析已順利完成！已選取套用 <strong class="text-purple-600 font-semibold">{{ selectedMultiProposalsCount }}</strong> / {{ multiStageActions.length }} 個結構調整
+                  十二層深度分析已順利完成！已選取套用 <strong class="text-purple-600 font-semibold">{{ selectedMultiProposalsCount }}</strong> / {{ multiStageActions.length }} 個結構調整
                 </template>
               </span>
               
