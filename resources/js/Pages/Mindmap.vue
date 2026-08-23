@@ -518,6 +518,10 @@ onMounted(() => {
           }
         })
         stagesProgress.value = loaded
+        const hasActiveProgress = loaded.some(s => s.status === 'success' || s.status === 'running')
+        if (hasActiveProgress) {
+          hasStartedMultiStage.value = true
+        }
       }
     }
   } else {
@@ -1131,7 +1135,7 @@ const batchColorSelection = (color) => {
 const isUserEngineerVal = isUserEngineer.value
 const mbtiStyleVal = mbtiStyle.value
 
-const archiveCurrentRunToHistory = () => {
+const archiveCurrentRunToHistory = async () => {
   const hasOutputs = stageOutputs.value.some(out => out && out.trim())
   if (!hasOutputs) return
 
@@ -1147,6 +1151,7 @@ const archiveCurrentRunToHistory = () => {
   }
   
   historyVersions.value.unshift(newArchive)
+  await saveAiHistoryProgress()
 }
 
 const loadHistoryVersion = (version) => {
@@ -1167,12 +1172,12 @@ const deleteHistoryVersion = (index) => {
   saveAiHistoryProgress()
 }
 
-const triggerMultiStageAnalysisStart = () => {
+const triggerMultiStageAnalysisStart = async () => {
   if (isMultiStagePaused.value) {
     isMultiStagePaused.value = false
     runMultiStageAnalysis(currentAnalyzingStageIndex.value)
   } else {
-    archiveCurrentRunToHistory()
+    await archiveCurrentRunToHistory()
     stageOutputs.value = ['', '', '', '', '', '', '', '', '', '', '', '', '']
     stagesProgress.value.forEach(s => s.status = 'idle')
     multiStageActions.value = []
