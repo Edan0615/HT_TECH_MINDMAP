@@ -1172,6 +1172,25 @@ const deleteHistoryVersion = (index) => {
   saveAiHistoryProgress()
 }
 
+const saveCurrentRunAsNewVersion = async () => {
+  const hasOutputs = stageOutputs.value.some(out => out && out.trim())
+  if (!hasOutputs) return
+
+  const timestamp = new Date().toLocaleString('zh-TW', { hour12: false })
+  const newArchive = {
+    timestamp,
+    mbtiStyle: mbtiStyle.value,
+    isUserEngineer: isUserEngineer.value,
+    stagesProgress: JSON.parse(JSON.stringify(stagesProgress.value)),
+    stageOutputs: JSON.parse(JSON.stringify(stageOutputs.value)),
+    stageLogs: JSON.parse(JSON.stringify(stageLogs.value)),
+    stageThoughts: JSON.parse(JSON.stringify(stageThoughts.value))
+  }
+  
+  historyVersions.value.unshift(newArchive)
+  await saveAiHistoryProgress()
+}
+
 const triggerMultiStageAnalysisStart = async () => {
   if (isMultiStagePaused.value) {
     isMultiStagePaused.value = false
@@ -2498,6 +2517,7 @@ const selectedMultiProposalsCount = computed(() => {
       @print="generatePrintableReport"
       @loadVersion="loadHistoryVersion"
       @deleteVersion="deleteHistoryVersion"
+      @saveVersion="saveCurrentRunAsNewVersion"
     />
     
     <!-- Import Raw Code Modal -->

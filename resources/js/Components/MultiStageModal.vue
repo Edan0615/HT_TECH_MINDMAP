@@ -61,7 +61,8 @@ const emit = defineEmits([
   'applyProposals',
   'print',
   'loadVersion',
-  'deleteVersion'
+  'deleteVersion',
+  'saveVersion'
 ])
 
 // Local UI States
@@ -560,6 +561,13 @@ const getLatestThinkingLine = (thoughts) => {
                   class="px-4 py-2 border border-neutral-300 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>🖨️ 列印 / 匯出 PDF</span>
+                </button>
+                <button 
+                  v-if="hasStartedMultiStage && !isMultiStageRunning && !isMultiStagePaused"
+                  @click="emit('saveVersion')"
+                  class="px-4 py-2 border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>💾 儲存為新版本</span>
                 </button>
                 <button 
                   v-if="isMultiStageRunning"
