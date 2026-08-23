@@ -337,6 +337,7 @@ const getStoredModel = () => {
 
 const apiEndpoint = ref(getStoredEndpoint())
 const apiModel = ref(getStoredModel())
+const allowAiReadCode = ref(true)
 
 watch(apiEndpoint, (newVal) => {
   localStorage.setItem('mindmap_ai_endpoint', newVal)
