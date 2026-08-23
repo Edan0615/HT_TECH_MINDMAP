@@ -79,6 +79,12 @@ const handleRefine = () => {
   emit('refine', refinementInput.value)
   refinementInput.value = ''
 }
+
+const getLatestThinkingLine = (thoughts) => {
+  if (!thoughts) return 'AI 正在梳理架構思路...'
+  const lines = thoughts.split('\n').map(l => l.trim()).filter(Boolean)
+  return lines[lines.length - 1] || 'AI 正在梳理架構思路...'
+}
 </script>
 
 <template>
@@ -360,16 +366,12 @@ const handleRefine = () => {
                     <div class="space-y-1.5" v-html="stageLogs[idx]"></div>
                   </div>
                   
-                  <!-- 1. Active Thinking Panel -->
-                  <div v-if="currentAnalyzingStageIndex === idx && isMultiStageRunning && stageThoughts[idx]" class="relative border border-purple-100/70 rounded-xl bg-purple-50/5 p-4 mb-4 overflow-hidden">
-                    <div class="absolute inset-0 bg-white/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none select-none">
-                      <div class="bg-white/95 border border-purple-200/50 px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5 animate-pulse">
-                        <SpinnerIcon class="w-3.5 h-3.5 text-purple-600 animate-spin" />
-                        <span class="text-[10px] font-bold text-purple-700">AI 思考中...</span>
-                      </div>
-                    </div>
-                    <div class="text-[11px] font-mono text-neutral-500 italic whitespace-pre-wrap leading-relaxed select-text">
-                      {{ stageThoughts[idx] }}
+                  <!-- 1. Active Thinking Panel (Dynamic Single Line Ticker) -->
+                  <div v-if="currentAnalyzingStageIndex === idx && isMultiStageRunning && stageThoughts[idx]" class="p-3.5 bg-purple-50/30 border border-purple-100 rounded-xl mb-4 flex items-center gap-2 overflow-hidden shadow-inner select-none">
+                    <span class="w-2 h-2 rounded-full bg-purple-500 animate-ping shrink-0"></span>
+                    <span class="text-[10px] font-bold text-purple-700 uppercase tracking-wide shrink-0">AI 思考脈絡:</span>
+                    <div class="flex-1 text-[11px] font-mono text-neutral-600 truncate italic">
+                      {{ getLatestThinkingLine(stageThoughts[idx]) }}<span class="animate-pulse text-purple-500 font-bold">_</span>
                     </div>
                   </div>
 
